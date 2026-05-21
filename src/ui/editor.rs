@@ -333,4 +333,35 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             app.log(&format!("[Editor] Inserted boilerplate for syscall: {}", syscall_name));
         }
     }
+
+    ui.add_space(8.0);
+    ui.collapsing("🚫 Bad Characters", |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Exclude bytes:");
+            ui.add(
+                egui::TextEdit::singleline(&mut app.bad_chars_input)
+                    .hint_text("e.g. 00 0a 0d 90-ff")
+                    .desired_width(180.0)
+            );
+            if ui.button("Clear").clicked() {
+                app.bad_chars_input.clear();
+            }
+        });
+        
+        let bad_chars = crate::assembler::parse_bad_characters(&app.bad_chars_input);
+        if !bad_chars.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                ui.label(egui::RichText::new("Parsed:").weak());
+                let mut sorted_chars: Vec<&u8> = bad_chars.iter().collect();
+                sorted_chars.sort();
+                for &b in sorted_chars {
+                    ui.label(egui::RichText::new(format!("{:02x}", b)).monospace().color(Color32::from_rgb(255, 118, 117)));
+                }
+            });
+        } else {
+            ui.colored_label(Color32::GRAY, "No bad characters defined.");
+        }
+        ui.add_space(4.0);
+    });
 }

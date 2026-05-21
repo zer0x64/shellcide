@@ -46,6 +46,7 @@ pub struct ShellcideApp {
     pub(crate) editing_memory_byte: Option<usize>,
     pub(crate) memory_byte_input: String,
     pub(crate) syscall_search: String,
+    pub(crate) bad_chars_input: String,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -124,6 +125,7 @@ _start:
             editing_memory_byte: None,
             memory_byte_input: String::new(),
             syscall_search: String::new(),
+            bad_chars_input: String::new(),
         }
     }
 
@@ -188,6 +190,25 @@ _start:
         match assemble(&self.code_input, CODE_BASE as u64, self.att_syntax) {
             Ok(bytes) => {
                 self.log(&format!("[✓] Shellcode compiled successfully. Size: {} bytes.", bytes.len()));
+                
+                let bad_chars = crate::assembler::parse_bad_characters(&self.bad_chars_input);
+                if !bad_chars.is_empty() {
+                    let mut found_bad_bytes = Vec::new();
+                    for (i, &b) in bytes.iter().enumerate() {
+                        if bad_chars.contains(&b) {
+                            let addr = CODE_BASE + i;
+                            found_bad_bytes.push(format!("0x{:02X} at 0x{:08X}", b, addr));
+                        }
+                    }
+                    if !found_bad_bytes.is_empty() {
+                        self.log(&format!(
+                            "[⚠️ WARNING] Found {} bad character(s) in compiled code:\n    {}",
+                            found_bad_bytes.len(),
+                            found_bad_bytes.join(", ")
+                        ));
+                    }
+                }
+
                 self.compiled_bytes = bytes.clone();
                 self.disassembly = disassemble_code(&bytes, CODE_BASE as u64, self.att_syntax);
                 
@@ -417,6 +438,7 @@ mod tests {
             memory_byte_input: String::new(),
             compiled_bytes: bytes,
             syscall_search: String::new(),
+            bad_chars_input: String::new(),
         }
     }
 
@@ -474,6 +496,18 @@ mod tests {
         assert_eq!(extract_arg_name("unsigned"), "unsigned");
         assert_eq!(extract_arg_name("const struct sockaddr *"), "sockaddr");
         assert_eq!(extract_arg_name("unsigned long"), "long");
+    }
+
+    #[test]
+    fn test_do_assemble_bad_chars_warning() {
+        let mut app = dummy_app(vec![]);
+        app.code_input = "nop".to_string();
+        app.bad_chars_input = "90".to_string();
+        app.do_assemble();
+        
+        assert!(app.console_log.contains("compiled successfully"));
+        assert!(app.console_log.contains("[⚠️ WARNING] Found 1 bad character(s)"));
+        assert!(app.console_log.contains("0x90 at 0x10000000"));
     }
 }
 

@@ -81,7 +81,14 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     });
 
     ui.separator();
-    ui.heading("Shellcode Disassembly");
+    ui.horizontal(|ui| {
+        ui.heading("Shellcode Disassembly");
+        if !app.compiled_bytes.is_empty() {
+            ui.add_space(8.0);
+            let size_text = format!("({} bytes)", app.compiled_bytes.len());
+            ui.label(egui::RichText::new(size_text).monospace().strong().color(Color32::from_rgb(0, 206, 201)));
+        }
+    });
     ui.separator();
 
     // Disassembly Instruction View
@@ -90,6 +97,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         if app.disassembly.is_empty() {
             ui.colored_label(Color32::GRAY, "(Assemble shellcode to view disassembly)");
         } else {
+            let bad_chars = crate::assembler::parse_bad_characters(&app.bad_chars_input);
             egui::Grid::new("disasm_grid").num_columns(6).spacing([8.0, 4.0]).show(ui, |ui| {
                 for inst in app.disassembly.clone() {
                     let addr = inst.address as usize;
@@ -124,9 +132,24 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     ui.label(egui::RichText::new(format!("0x{:08X}:", addr)).monospace().color(addr_color));
 
                     // 4. Hex machine bytes
-                    let bytes_str = inst.bytes.iter().map(|b| format!("{:02X}", b)).collect::<Vec<String>>().join(" ");
-                    let bytes_color = if is_current { Color32::from_rgb(116, 185, 255) } else { Color32::from_rgb(99, 110, 114) };
-                    ui.label(egui::RichText::new(bytes_str).monospace().color(bytes_color));
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        for &b in &inst.bytes {
+                            let is_bad = bad_chars.contains(&b);
+                            let b_color = if is_bad {
+                                Color32::from_rgb(255, 118, 117)
+                            } else if is_current {
+                                Color32::from_rgb(116, 185, 255)
+                            } else {
+                                Color32::from_rgb(99, 110, 114)
+                            };
+                            let mut text = egui::RichText::new(format!("{:02X}", b)).monospace().color(b_color);
+                            if is_bad {
+                                text = text.strong();
+                            }
+                            ui.label(text);
+                        }
+                    });
 
                     // 5. Mnemonic & Opcode operands
                     let text_color = if is_current { Color32::from_rgb(0, 206, 201) } else { Color32::WHITE };
