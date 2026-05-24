@@ -7,6 +7,7 @@ use nix::unistd::Pid;
 use crate::debugger::{CpuRegisters, DebuggerCommand, DebuggerEvent, CODE_BASE, DATA_BASE};
 use crate::assembler::assemble;
 use crate::disassembler::{disassemble_code, DisassembledInstruction};
+use crate::ui::struct_packer::{LeftBottomTab, StructPackerState};
 
 pub struct ShellcideApp {
     // Code input and settings
@@ -47,6 +48,10 @@ pub struct ShellcideApp {
     pub(crate) memory_byte_input: String,
     pub(crate) syscall_search: String,
     pub(crate) bad_chars_input: String,
+
+    // Struct Packer and bottom-left tab
+    pub(crate) left_bottom_tab: LeftBottomTab,
+    pub(crate) struct_packer: StructPackerState,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -96,6 +101,8 @@ impl ShellcideApp {
             memory_byte_input: String::new(),
             syscall_search: String::new(),
             bad_chars_input: String::new(),
+            left_bottom_tab: LeftBottomTab::Syscalls,
+            struct_packer: StructPackerState::default(),
         }
     }
 
@@ -258,6 +265,37 @@ impl ShellcideApp {
         out.push_str("\n];");
         out
     }
+
+    pub(crate) fn insert_into_editor(&mut self, ctx: &egui::Context, text: &str) {
+        let text_edit_id = egui::Id::new("code_editor_text_edit");
+        let mut state = egui::widgets::text_edit::TextEditState::load(ctx, text_edit_id).unwrap_or_default();
+        let char_range = state.cursor.char_range();
+        
+        let inserted_len = text.chars().count();
+        
+        let (byte_idx, char_idx) = if let Some(range) = char_range {
+            let cursor_idx = range.primary.index;
+            let byte_offset = self.code_input.char_indices()
+                .nth(cursor_idx)
+                .map(|(i, _)| i)
+                .unwrap_or(self.code_input.len());
+            (byte_offset, cursor_idx)
+        } else {
+            let total_chars = self.code_input.chars().count();
+            (self.code_input.len(), total_chars)
+        };
+        
+        self.code_input.insert_str(byte_idx, text);
+        
+        // Update cursor position to end of inserted text
+        let new_char_idx = char_idx + inserted_len;
+        let new_range = egui::text::CCursorRange::two(
+            egui::text::CCursor::new(new_char_idx),
+            egui::text::CCursor::new(new_char_idx),
+        );
+        state.cursor.set_char_range(Some(new_range));
+        state.store(ctx, text_edit_id);
+    }
 }
 
 impl eframe::App for ShellcideApp {
@@ -308,7 +346,7 @@ impl eframe::App for ShellcideApp {
 
         crate::ui::header::render_header_panel(self, ctx);
 
-        // Left Panel (Code Editor & Syscall Help)
+        // Left Panel (Code Editor & Tabs at bottom)
         egui::SidePanel::left("left_panel")
             .resizable(true)
             .min_width(200.0)
@@ -316,7 +354,21 @@ impl eframe::App for ShellcideApp {
             .show(ctx, |ui| {
                 crate::ui::editor::render_editor_panel(self, ui);
                 ui.separator();
-                crate::ui::syscalls::render_syscalls_panel(self, ui);
+                
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.left_bottom_tab, LeftBottomTab::Syscalls, "Syscalls");
+                    ui.selectable_value(&mut self.left_bottom_tab, LeftBottomTab::StructPacker, "Struct Packer");
+                });
+                ui.separator();
+
+                match self.left_bottom_tab {
+                    LeftBottomTab::Syscalls => {
+                        crate::ui::syscalls::render_syscalls_panel(self, ui);
+                    }
+                    LeftBottomTab::StructPacker => {
+                        crate::ui::struct_packer::render_struct_packer_panel(self, ui);
+                    }
+                }
             });
 
         // Right Panel (Registers & Memory)
@@ -409,6 +461,8 @@ mod tests {
             compiled_bytes: bytes,
             syscall_search: String::new(),
             bad_chars_input: String::new(),
+            left_bottom_tab: LeftBottomTab::Syscalls,
+            struct_packer: StructPackerState::default(),
         }
     }
 
