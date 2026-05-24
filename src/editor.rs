@@ -70,12 +70,22 @@ struct SyntaxColors {
     directive: egui::Color32,
 }
 
+fn get_line_background(line_idx: usize, bad_char_lines: &std::collections::HashSet<usize>) -> egui::Color32 {
+    if bad_char_lines.contains(&line_idx) {
+        egui::Color32::from_rgba_unmultiplied(255, 118, 117, 30)
+    } else {
+        egui::Color32::TRANSPARENT
+    }
+}
+
 /// Flushes the active token string and appends formatted text to the LayoutJob.
 fn flush_token(
     token: &mut String,
     job: &mut egui::text::LayoutJob,
     font_id: &egui::FontId,
     colors: &SyntaxColors,
+    current_line_idx: usize,
+    bad_char_lines: &std::collections::HashSet<usize>,
 ) {
     if token.is_empty() {
         return;
@@ -95,12 +105,15 @@ fn flush_token(
         colors.default
     };
 
+    let background = get_line_background(current_line_idx, bad_char_lines);
+
     job.append(
         token,
         0.0,
         egui::TextFormat {
             font_id: font_id.clone(),
             color,
+            background,
             ..Default::default()
         },
     );
@@ -108,7 +121,11 @@ fn flush_token(
 }
 
 /// Highlight assembly code and return an egui::text::LayoutJob.
-pub fn highlight_assembly(_ui: &egui::Ui, code: &str) -> egui::text::LayoutJob {
+pub fn highlight_assembly(
+    _ui: &egui::Ui,
+    code: &str,
+    bad_char_lines: &std::collections::HashSet<usize>,
+) -> egui::text::LayoutJob {
     let font_id = egui::FontId::monospace(14.0);
     let mut job = egui::text::LayoutJob::default();
 
@@ -125,6 +142,7 @@ pub fn highlight_assembly(_ui: &egui::Ui, code: &str) -> egui::text::LayoutJob {
 
     let mut chars = code.chars().peekable();
     let mut current_token = String::new();
+    let mut current_line_idx = 0;
 
     while let Some(c) = chars.next() {
         if c == ';' || c == '#' {
@@ -134,6 +152,8 @@ pub fn highlight_assembly(_ui: &egui::Ui, code: &str) -> egui::text::LayoutJob {
                 &mut job,
                 &font_id,
                 &colors,
+                current_line_idx,
+                bad_char_lines,
             );
 
             // Accumulate rest of line as a comment
@@ -146,12 +166,15 @@ pub fn highlight_assembly(_ui: &egui::Ui, code: &str) -> egui::text::LayoutJob {
                 comment.push(chars.next().unwrap());
             }
 
+            let background = get_line_background(current_line_idx, bad_char_lines);
+
             job.append(
                 &comment,
                 0.0,
                 egui::TextFormat {
                     font_id: font_id.clone(),
                     color: color_comment,
+                    background,
                     ..Default::default()
                 },
             );
@@ -161,12 +184,14 @@ pub fn highlight_assembly(_ui: &egui::Ui, code: &str) -> egui::text::LayoutJob {
             // Separator hit. Flush previous token first.
             if c == ':' && !current_token.is_empty() {
                 current_token.push(c);
+                let background = get_line_background(current_line_idx, bad_char_lines);
                 job.append(
                     &current_token,
                     0.0,
                     egui::TextFormat {
                         font_id: font_id.clone(),
                         color: color_label,
+                        background,
                         ..Default::default()
                     },
                 );
@@ -177,19 +202,27 @@ pub fn highlight_assembly(_ui: &egui::Ui, code: &str) -> egui::text::LayoutJob {
                     &mut job,
                     &font_id,
                     &colors,
+                    current_line_idx,
+                    bad_char_lines,
                 );
 
                 let mut sep = String::new();
                 sep.push(c);
+                let background = get_line_background(current_line_idx, bad_char_lines);
                 job.append(
                     &sep,
                     0.0,
                     egui::TextFormat {
                         font_id: font_id.clone(),
                         color: colors.default,
+                        background,
                         ..Default::default()
                     },
                 );
+
+                if c == '\n' {
+                    current_line_idx += 1;
+                }
             }
         }
     }
@@ -200,7 +233,49 @@ pub fn highlight_assembly(_ui: &egui::Ui, code: &str) -> egui::text::LayoutJob {
         &mut job,
         &font_id,
         &colors,
+        current_line_idx,
+        bad_char_lines,
     );
 
     job
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_highlight_assembly_bad_char_background() {
+        let code = "nop\nmov rax, 0\nxor rbx, rbx";
+        let mut bad_lines = HashSet::new();
+        bad_lines.insert(1); // second line "mov rax, 0"
+
+        let ctx = egui::Context::default();
+        let _ = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let job = highlight_assembly(ui, code, &bad_lines);
+                
+                let mut found_bad = false;
+                let mut found_good = false;
+                
+                for section in &job.sections {
+                    let section_text = &job.text[section.byte_range.clone()];
+                    if section_text.contains("mov") || section_text.contains("rax") {
+                        assert_eq!(
+                            section.format.background,
+                            egui::Color32::from_rgba_unmultiplied(255, 118, 117, 30)
+                        );
+                        found_bad = true;
+                    }
+                    if section_text.contains("nop") {
+                        assert_eq!(section.format.background, egui::Color32::TRANSPARENT);
+                        found_good = true;
+                    }
+                }
+                assert!(found_bad);
+                assert!(found_good);
+            });
+        });
+    }
 }

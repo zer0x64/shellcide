@@ -48,6 +48,7 @@ pub struct ShellcideApp {
     pub(crate) memory_byte_input: String,
     pub(crate) syscall_search: String,
     pub(crate) bad_chars_input: String,
+    pub(crate) bad_char_lines: std::collections::HashSet<usize>,
 
     // Struct Packer and bottom-left tab
     pub(crate) left_bottom_tab: LeftBottomTab,
@@ -101,6 +102,7 @@ impl ShellcideApp {
             memory_byte_input: String::new(),
             syscall_search: String::new(),
             bad_chars_input: String::new(),
+            bad_char_lines: HashSet::new(),
             left_bottom_tab: LeftBottomTab::Syscalls,
             struct_packer: StructPackerState::default(),
         }
@@ -131,6 +133,13 @@ impl ShellcideApp {
         line_to_inst_idx
     }
 
+    pub(crate) fn get_inst_to_line_mapping(&self) -> HashMap<usize, usize> {
+        self.get_line_to_inst_mapping()
+            .into_iter()
+            .map(|(line_idx, inst_idx)| (inst_idx, line_idx))
+            .collect()
+    }
+
     pub(crate) fn sync_breakpoints_from_code(&mut self) {
         if self.disassembly.is_empty() {
             return;
@@ -152,10 +161,10 @@ impl ShellcideApp {
             return;
         }
         self.editor_breakpoints.clear();
-        let line_to_inst_idx = self.get_line_to_inst_mapping();
+        let inst_to_line = self.get_inst_to_line_mapping();
         for &addr in &self.breakpoints {
             if let Some(inst_idx) = self.disassembly.iter().position(|inst| inst.address as usize == addr) {
-                if let Some(&line_idx) = line_to_inst_idx.iter().find(|&(_, &idx)| idx == inst_idx).map(|(l, _)| l) {
+                if let Some(&line_idx) = inst_to_line.get(&inst_idx) {
                     self.editor_breakpoints.insert(line_idx);
                 }
             }
@@ -163,6 +172,7 @@ impl ShellcideApp {
     }
 
     pub(crate) fn do_assemble(&mut self) {
+        self.bad_char_lines.clear();
         self.log("[+] Assembling shellcode...");
         match assemble(&self.code_input, CODE_BASE as u64, self.att_syntax) {
             Ok(bytes) => {
@@ -189,6 +199,18 @@ impl ShellcideApp {
                 self.compiled_bytes = bytes.clone();
                 self.disassembly = disassemble_code(&bytes, CODE_BASE as u64, self.att_syntax);
                 
+                // Calculate which lines contain bad characters
+                if !bad_chars.is_empty() {
+                    let inst_to_line = self.get_inst_to_line_mapping();
+                    for (inst_idx, inst) in self.disassembly.iter().enumerate() {
+                        if inst.bytes.iter().any(|b| bad_chars.contains(b)) {
+                            if let Some(&line_idx) = inst_to_line.get(&inst_idx) {
+                                self.bad_char_lines.insert(line_idx);
+                            }
+                        }
+                    }
+                }
+
                 // Sync breakpoints from editor text comments to our internal set
                 self.sync_breakpoints_from_code();
 
@@ -461,6 +483,7 @@ mod tests {
             compiled_bytes: bytes,
             syscall_search: String::new(),
             bad_chars_input: String::new(),
+            bad_char_lines: HashSet::new(),
             left_bottom_tab: LeftBottomTab::Syscalls,
             struct_packer: StructPackerState::default(),
         }
@@ -532,6 +555,7 @@ mod tests {
         assert!(app.console_log.contains("compiled successfully"));
         assert!(app.console_log.contains("[⚠️ WARNING] Found 1 bad character(s)"));
         assert!(app.console_log.contains("0x90 at 0x10000000"));
+        assert!(app.bad_char_lines.contains(&0));
     }
 }
 

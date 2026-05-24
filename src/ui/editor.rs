@@ -204,8 +204,9 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     };
 
     let (_dnd_resp, dropped_payload) = ui.dnd_drop_zone::<String, _>(frame, |ui| {
+        let bad_char_lines = app.bad_char_lines.clone();
         let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
-            let mut job = crate::editor::highlight_assembly(ui, string);
+            let mut job = crate::editor::highlight_assembly(ui, string, &bad_char_lines);
             job.wrap.max_width = f32::INFINITY; // Disable wrapping to ensure line-number alignment
             ui.fonts(|f| f.layout_job(job))
         };
@@ -226,14 +227,14 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         let has_bp = app.editor_breakpoints.contains(&i);
                         
                         let (rect, response) = ui.allocate_exact_size(
-                            egui::vec2(35.0, row_height), 
+                            egui::vec2(60.0, row_height), 
                             egui::Sense::click()
                         );
                         
                         if response.clicked() {
-                            let line_to_inst_idx = app.get_line_to_inst_mapping();
+                            let line_to_inst = app.get_line_to_inst_mapping();
                             let mut resolved_addr = None;
-                            if let Some(&inst_idx) = line_to_inst_idx.get(&i) {
+                            if let Some(&inst_idx) = line_to_inst.get(&i) {
                                 if inst_idx < app.disassembly.len() {
                                     resolved_addr = Some(app.disassembly[inst_idx].address as usize);
                                 }
@@ -267,7 +268,8 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         };
                         
                         let bp_char = if has_bp { "● " } else { "  " };
-                        let label = format!("{}{:>2}", bp_char, i + 1);
+                        let warn_char = if app.bad_char_lines.contains(&i) { "⚠️ " } else { "  " };
+                        let label = format!("{}{}{:>2}", bp_char, warn_char, i + 1);
                         
                         ui.painter().text(
                             rect.left_center(),
