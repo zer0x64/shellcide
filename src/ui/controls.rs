@@ -2,6 +2,13 @@ use eframe::egui::{self, Color32};
 use crate::app::{ShellcideApp, ConsoleTab};
 use crate::debugger::DebuggerCommand;
 
+fn highlight_if(mut text: egui::RichText, cond: bool) -> egui::RichText {
+    if cond {
+        text = text.background_color(Color32::from_rgba_unmultiplied(0, 206, 201, 30));
+    }
+    text
+}
+
 pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     ui.heading("Debugger Controls");
     ui.separator();
@@ -106,8 +113,9 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
                     // 1. Breakpoint margin toggle button
                     let bp_text = if has_bp { "🔴" } else { "  " };
+                    let bp_rich = highlight_if(egui::RichText::new(bp_text).monospace(), is_current);
                     let bp_btn = ui.add(
-                        egui::Button::new(egui::RichText::new(bp_text).monospace())
+                        egui::Button::new(bp_rich)
                             .frame(false)
                     );
                     if bp_btn.clicked() {
@@ -125,11 +133,19 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
                     // 2. Active RIP indicator arrow
                     let rip_indicator = if is_current { "👉" } else { "  " };
-                    ui.label(egui::RichText::new(rip_indicator).monospace().strong().color(Color32::from_rgb(0, 206, 201)));
+                    let rip_rich = highlight_if(
+                        egui::RichText::new(rip_indicator).monospace().strong().color(Color32::from_rgb(0, 206, 201)),
+                        is_current
+                    );
+                    ui.label(rip_rich);
 
                     // 3. Instruction address
                     let addr_color = if is_current { Color32::from_rgb(0, 206, 201) } else { Color32::GRAY };
-                    ui.label(egui::RichText::new(format!("0x{:08X}:", addr)).monospace().color(addr_color));
+                    let addr_rich = highlight_if(
+                        egui::RichText::new(format!("0x{:08X}:", addr)).monospace().color(addr_color),
+                        is_current
+                    );
+                    ui.label(addr_rich);
 
                     // 4. Hex machine bytes
                     ui.horizontal(|ui| {
@@ -147,23 +163,29 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             if is_bad {
                                 text = text.strong();
                             }
+                            let text = highlight_if(text, is_current);
                             ui.label(text);
                         }
                     });
 
                     // 5. Mnemonic & Opcode operands
                     let text_color = if is_current { Color32::from_rgb(0, 206, 201) } else { Color32::WHITE };
-                    ui.label(
+                    let mnem_rich = highlight_if(
                         egui::RichText::new(&inst.mnemonic)
                             .monospace()
                             .strong()
-                            .color(text_color)
+                            .color(text_color),
+                        is_current
                     );
-                    ui.label(
+                    ui.label(mnem_rich);
+
+                    let op_rich = highlight_if(
                         egui::RichText::new(&inst.op_str)
                             .monospace()
-                            .color(text_color)
+                            .color(text_color),
+                        is_current
                     );
+                    ui.label(op_rich);
                     ui.end_row();
                 }
             });

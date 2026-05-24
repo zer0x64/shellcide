@@ -55,6 +55,7 @@ pub enum DebuggerCommand {
 #[derive(Debug, Clone)]
 pub enum DebuggerEvent {
     Started {
+        pid: Pid,
         regs: CpuRegisters,
     },
     Stopped {
@@ -132,8 +133,29 @@ pub fn setup_parent_mappings() -> Result<(), String> {
 
 /// Reads memory of the child process.
 pub fn read_child_mem(pid: Pid, address: usize, len: usize) -> std::io::Result<Vec<u8>> {
+    let mut segment_end = None;
+    if address >= CODE_BASE && address < CODE_BASE + 0x10_0000 {
+        segment_end = Some(CODE_BASE + 0x10_0000);
+    } else if address >= DATA_BASE && address < DATA_BASE + 0x10_0000 {
+        segment_end = Some(DATA_BASE + 0x10_0000);
+    } else if address >= STACK_BASE && address < STACK_BASE + STACK_SIZE {
+        segment_end = Some(STACK_BASE + STACK_SIZE);
+    }
+
     let path = format!("/proc/{}/mem", pid);
     let mut file = File::open(path)?;
+
+    if let Some(end) = segment_end {
+        if len > end - address {
+            let clamped_len = end - address;
+            file.seek(SeekFrom::Start(address as u64))?;
+            let mut buf = vec![0; clamped_len];
+            file.read_exact(&mut buf)?;
+            buf.resize(len, 0);
+            return Ok(buf);
+        }
+    }
+
     file.seek(SeekFrom::Start(address as u64))?;
     let mut buf = vec![0; len];
     file.read_exact(&mut buf)?;
@@ -325,7 +347,7 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                                     continue;
                                 }
 
-                                let _ = tx.send(DebuggerEvent::Started { regs });
+                                let _ = tx.send(DebuggerEvent::Started { pid: child, regs });
 
                                 // Resume child execution immediately so there is no automatic breakpoint on the first instruction!
                                 if let Err(e) = ptrace::cont(child, None) {
@@ -626,7 +648,7 @@ mod tests {
 
         // Expect Started event
         match evt_rx.recv().unwrap() {
-            DebuggerEvent::Started { regs } => {
+            DebuggerEvent::Started { regs, .. } => {
                 assert_eq!(regs.rip, CODE_BASE as u64);
             }
             other => panic!("Expected Started event, got {:?}", other),
@@ -659,6 +681,54 @@ mod tests {
         }
 
         // Clean up
+        drop(cmd_tx);
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn test_read_child_mem_boundary() {
+        let _ = setup_parent_mappings();
+
+        let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
+        let (evt_tx, evt_rx) = crossbeam_channel::unbounded();
+
+        let handle = std::thread::spawn(move || {
+            run_debugger_thread(cmd_rx, evt_tx);
+        });
+
+        let code = vec![0x90];
+
+        cmd_tx.send(DebuggerCommand::Start {
+            code,
+            initial_regs: CpuRegisters::default(),
+            memory_patches: vec![],
+            breakpoints: vec![CODE_BASE],
+        }).unwrap();
+
+        let pid = match evt_rx.recv().unwrap() {
+            DebuggerEvent::Started { pid, .. } => pid,
+            other => panic!("Expected Started event, got {:?}", other),
+        };
+
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { .. } => {}
+            other => panic!("Expected Stopped event, got {:?}", other),
+        };
+
+        let read_addr = STACK_BASE + STACK_SIZE - 8;
+        let res = read_child_mem(pid, read_addr, 256);
+        assert!(res.is_ok(), "Failed to read boundary: {:?}", res.err());
+        let buf = res.unwrap();
+        assert_eq!(buf.len(), 256);
+        assert_eq!(&buf[8..256], &[0; 248]);
+
+        // Terminate
+        cmd_tx.send(DebuggerCommand::Terminate).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Terminated { .. } => {}
+            other => panic!("Expected Terminated event, got {:?}", other),
+        }
+
         drop(cmd_tx);
         let _ = handle.join();
     }

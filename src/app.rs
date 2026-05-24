@@ -49,6 +49,8 @@ pub struct ShellcideApp {
     pub(crate) syscall_search: String,
     pub(crate) bad_chars_input: String,
     pub(crate) bad_char_lines: std::collections::HashSet<usize>,
+    pub(crate) reg_change_times: std::collections::HashMap<String, std::time::Instant>,
+    pub(crate) auto_follow_rsp: bool,
 
     // Struct Packer and bottom-left tab
     pub(crate) left_bottom_tab: LeftBottomTab,
@@ -101,8 +103,10 @@ impl ShellcideApp {
             editing_memory_byte: None,
             memory_byte_input: String::new(),
             syscall_search: String::new(),
-            bad_chars_input: String::new(),
+            bad_chars_input: "00".to_string(),
             bad_char_lines: HashSet::new(),
+            reg_change_times: HashMap::new(),
+            auto_follow_rsp: false,
             left_bottom_tab: LeftBottomTab::Syscalls,
             struct_packer: StructPackerState::default(),
         }
@@ -239,6 +243,17 @@ impl ShellcideApp {
         }
     }
 
+    pub(crate) fn jump_to_memory_address(&mut self, addr: usize) {
+        self.memory_base_address = addr;
+        self.mem_base_input = format!("0x{:X}", addr);
+        self.refresh_memory();
+    }
+
+    pub(crate) fn get_centered_rsp(&self) -> usize {
+        (self.regs.rsp as usize).saturating_sub(0x80) & !0xF
+    }
+
+
     pub(crate) fn format_raw_hex(&self) -> String {
         self.compiled_bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>()
     }
@@ -318,6 +333,28 @@ impl ShellcideApp {
         state.cursor.set_char_range(Some(new_range));
         state.store(ctx, text_edit_id);
     }
+
+    pub(crate) fn update_register_change_timestamps(&mut self, prev: CpuRegisters, next: CpuRegisters) {
+        let now = std::time::Instant::now();
+        if prev.rax != next.rax { self.reg_change_times.insert("rax".to_string(), now); }
+        if prev.rbx != next.rbx { self.reg_change_times.insert("rbx".to_string(), now); }
+        if prev.rcx != next.rcx { self.reg_change_times.insert("rcx".to_string(), now); }
+        if prev.rdx != next.rdx { self.reg_change_times.insert("rdx".to_string(), now); }
+        if prev.rsi != next.rsi { self.reg_change_times.insert("rsi".to_string(), now); }
+        if prev.rdi != next.rdi { self.reg_change_times.insert("rdi".to_string(), now); }
+        if prev.rbp != next.rbp { self.reg_change_times.insert("rbp".to_string(), now); }
+        if prev.rsp != next.rsp { self.reg_change_times.insert("rsp".to_string(), now); }
+        if prev.rip != next.rip { self.reg_change_times.insert("rip".to_string(), now); }
+        if prev.rflags != next.rflags { self.reg_change_times.insert("rflags".to_string(), now); }
+        if prev.r8 != next.r8 { self.reg_change_times.insert("r8".to_string(), now); }
+        if prev.r9 != next.r9 { self.reg_change_times.insert("r9".to_string(), now); }
+        if prev.r10 != next.r10 { self.reg_change_times.insert("r10".to_string(), now); }
+        if prev.r11 != next.r11 { self.reg_change_times.insert("r11".to_string(), now); }
+        if prev.r12 != next.r12 { self.reg_change_times.insert("r12".to_string(), now); }
+        if prev.r13 != next.r13 { self.reg_change_times.insert("r13".to_string(), now); }
+        if prev.r14 != next.r14 { self.reg_change_times.insert("r14".to_string(), now); }
+        if prev.r15 != next.r15 { self.reg_change_times.insert("r15".to_string(), now); }
+    }
 }
 
 impl eframe::App for ShellcideApp {
@@ -325,11 +362,14 @@ impl eframe::App for ShellcideApp {
         // Poll event queue
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
-                DebuggerEvent::Started { regs } => {
+                DebuggerEvent::Started { pid, regs } => {
                     self.is_running = true;
                     self.is_stopped = false;
                     self.previous_regs = None;
+                    *self.shared_pid.lock().unwrap() = Some(pid);
+                    let old_regs = self.regs;
                     self.regs = regs;
+                    self.update_register_change_timestamps(old_regs, regs);
                     self.log("[Debugger] Child process spawned and running.");
                     self.refresh_memory();
                 }
@@ -337,7 +377,9 @@ impl eframe::App for ShellcideApp {
                     self.is_running = true;
                     self.is_stopped = true;
                     self.previous_regs = Some(self.regs);
+                    let old_regs = self.regs;
                     self.regs = regs;
+                    self.update_register_change_timestamps(old_regs, regs);
                     let at_addr = trap_addr.map_or(String::new(), |addr| format!(" at 0x{:X}", addr));
                     self.log(&format!("[Debugger] Process stopped (Signal: {:?}){}. {}", signal, at_addr, status_message));
                     self.refresh_memory();
@@ -345,12 +387,14 @@ impl eframe::App for ShellcideApp {
                 DebuggerEvent::Terminated { exit_code, status_message } => {
                     self.is_running = false;
                     self.is_stopped = false;
+                    *self.shared_pid.lock().unwrap() = None;
                     self.log(&format!("[Debugger] Process terminated with status code {}: {}", exit_code, status_message));
                     self.refresh_memory();
                 }
                 DebuggerEvent::Signaled { signal, status_message } => {
                     self.is_running = false;
                     self.is_stopped = false;
+                    *self.shared_pid.lock().unwrap() = None;
                     self.log(&format!("[Debugger] Process killed by signal: {:?}. {}", signal, status_message));
                     self.refresh_memory();
                 }
@@ -363,6 +407,20 @@ impl eframe::App for ShellcideApp {
                 DebuggerEvent::Error(err) => {
                     self.log(&format!("[Debugger Error] {}", err));
                 }
+            }
+        }
+
+        if self.is_running && self.is_stopped {
+            let mut refreshed = false;
+            if self.auto_follow_rsp {
+                let rsp_aligned = self.get_centered_rsp();
+                if self.memory_base_address != rsp_aligned {
+                    self.jump_to_memory_address(rsp_aligned);
+                    refreshed = true;
+                }
+            }
+            if !refreshed {
+                self.refresh_memory();
             }
         }
 
@@ -482,8 +540,10 @@ mod tests {
             memory_byte_input: String::new(),
             compiled_bytes: bytes,
             syscall_search: String::new(),
-            bad_chars_input: String::new(),
+            bad_chars_input: "00".to_string(),
             bad_char_lines: HashSet::new(),
+            reg_change_times: HashMap::new(),
+            auto_follow_rsp: false,
             left_bottom_tab: LeftBottomTab::Syscalls,
             struct_packer: StructPackerState::default(),
         }
@@ -556,6 +616,41 @@ mod tests {
         assert!(app.console_log.contains("[⚠️ WARNING] Found 1 bad character(s)"));
         assert!(app.console_log.contains("0x90 at 0x10000000"));
         assert!(app.bad_char_lines.contains(&0));
+    }
+
+    #[test]
+    fn test_memory_jump_rsp_rbp() {
+        let mut app = dummy_app(vec![]);
+        app.regs.rsp = 0x7fffffffe000;
+        app.regs.rbp = 0x7fffffffe010;
+
+        // Simulate Jump to RSP button click logic
+        let rsp_aligned = app.get_centered_rsp();
+        app.jump_to_memory_address(rsp_aligned);
+        assert_eq!(app.memory_base_address, 0x7fffffffdf80);
+        assert_eq!(app.mem_base_input, "0x7FFFFFFFDF80");
+
+        // Simulate Jump to RBP button click logic
+        app.jump_to_memory_address(app.regs.rbp as usize);
+        assert_eq!(app.memory_base_address, 0x7fffffffe010);
+        assert_eq!(app.mem_base_input, "0x7FFFFFFFE010");
+    }
+
+    #[test]
+    fn test_auto_follow_rsp() {
+        let mut app = dummy_app(vec![]);
+        app.is_running = true;
+        app.is_stopped = true;
+        app.auto_follow_rsp = true;
+        app.regs.rsp = 0x7fffffffe008; // unaligned RSP
+
+        let rsp_aligned = app.get_centered_rsp();
+        if app.memory_base_address != rsp_aligned {
+            app.jump_to_memory_address(rsp_aligned);
+        }
+
+        assert_eq!(app.memory_base_address, 0x7fffffffdf80);
+        assert_eq!(app.mem_base_input, "0x7FFFFFFFDF80");
     }
 }
 

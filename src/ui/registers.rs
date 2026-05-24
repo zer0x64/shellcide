@@ -2,6 +2,13 @@ use eframe::egui::{self, Color32};
 use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
 
+fn lerp_color(from: Color32, to: Color32, t: f32) -> Color32 {
+    let r = (from.r() as f32 + (to.r() as f32 - from.r() as f32) * t).round() as u8;
+    let g = (from.g() as f32 + (to.g() as f32 - from.g() as f32) * t).round() as u8;
+    let b = (from.b() as f32 + (to.b() as f32 - from.b() as f32) * t).round() as u8;
+    Color32::from_rgb(r, g, b)
+}
+
 pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     ui.heading("Registers");
     ui.separator();
@@ -52,25 +59,30 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             let ctx = ui.ctx().clone();
             for (name, val) in reg_list.clone() {
                 let name_str = name.to_string();
-                let changed = app.previous_regs.is_some_and(|p| {
-                    match name {
-                        "rax" => p.rax != val, "rbx" => p.rbx != val,
-                        "rcx" => p.rcx != val, "rdx" => p.rdx != val,
-                        "rsi" => p.rsi != val, "rdi" => p.rdi != val,
-                        "rbp" => p.rbp != val, "rsp" => p.rsp != val,
-                        "rip" => p.rip != val, "rflags" => p.rflags != val,
-                        "r8" => p.r8 != val, "r9" => p.r9 != val,
-                        "r10" => p.r10 != val, "r11" => p.r11 != val,
-                        "r12" => p.r12 != val, "r13" => p.r13 != val,
-                        "r14" => p.r14 != val, "r15" => p.r15 != val,
-                        _ => false,
+                
+                let animation_factor = if let Some(last_changed) = app.reg_change_times.get(name) {
+                    let elapsed = last_changed.elapsed().as_secs_f32();
+                    let duration = 0.8; // 800ms fade duration
+                    if elapsed < duration {
+                        ui.ctx().request_repaint();
+                        1.0 - (elapsed / duration)
+                    } else {
+                        0.0
                     }
-                });
+                } else {
+                    0.0
+                };
+
+                let name_color = lerp_color(
+                    Color32::from_rgb(0, 206, 201),
+                    Color32::from_rgb(250, 177, 160),
+                    animation_factor,
+                );
 
                 // Draw register name
                 ui.label(
                     egui::RichText::new(name)
-                        .color(if changed { Color32::from_rgb(250, 177, 160) } else { Color32::from_rgb(0, 206, 201) })
+                        .color(name_color)
                         .strong()
                 );
 
@@ -117,6 +129,7 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                 app.cmd_tx.send(DebuggerCommand::WriteRegs(app.regs)).unwrap();
                                 app.log(&format!("[Debugger] Updated register {} to 0x{:X}", name, v));
                             }
+                            app.reg_change_times.insert(name.to_string(), std::time::Instant::now());
                         } else {
                             app.log("[Input Error] Invalid register integer format.");
                         }
@@ -124,9 +137,13 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     }
                 } else {
                     let label_text = format!("0x{:016X}", val);
-                    let label_color = if changed { Color32::from_rgb(250, 177, 160) } else { Color32::WHITE };
+                    let val_color = lerp_color(
+                        Color32::WHITE,
+                        Color32::from_rgb(250, 177, 160),
+                        animation_factor,
+                    );
                     let val_label = ui.add(
-                        egui::Label::new(egui::RichText::new(label_text).color(label_color).monospace())
+                        egui::Label::new(egui::RichText::new(label_text).color(val_color).monospace())
                             .sense(egui::Sense::click())
                     );
                     if val_label.clicked() {

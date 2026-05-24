@@ -2,6 +2,21 @@ use eframe::egui::{self, Color32};
 use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
 
+fn highlight_stack_cell(mut label: egui::RichText, byte_addr: usize, app: &ShellcideApp) -> egui::RichText {
+    if app.is_running && app.is_stopped {
+        let rsp = app.regs.rsp as usize;
+        let rbp = app.regs.rbp as usize;
+        if byte_addr == rsp {
+            label = label.background_color(Color32::from_rgba_unmultiplied(253, 121, 168, 120));
+        } else if byte_addr == rbp {
+            label = label.background_color(Color32::from_rgba_unmultiplied(162, 155, 254, 120));
+        } else if byte_addr > rsp && byte_addr < rbp {
+            label = label.background_color(Color32::from_rgba_unmultiplied(253, 121, 168, 30));
+        }
+    }
+    label
+}
+
 pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     ui.heading("Memory Editor");
     ui.separator();
@@ -26,6 +41,16 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 app.log("[Input Error] Invalid address format.");
             }
         }
+
+        if app.is_running && app.is_stopped {
+            if ui.button("Jump to RSP").clicked() {
+                app.jump_to_memory_address(app.get_centered_rsp());
+            }
+            if ui.button("Jump to RBP").clicked() {
+                app.jump_to_memory_address(app.regs.rbp as usize);
+            }
+            ui.checkbox(&mut app.auto_follow_rsp, "Auto-Follow RSP");
+        }
     });
 
     ui.separator();
@@ -47,8 +72,23 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 let row_offset = r * 16;
                 let row_addr = app.memory_base_address + row_offset;
                 
+                let mut suffix = String::new();
+                if app.is_running && app.is_stopped {
+                    let rsp = app.regs.rsp as usize;
+                    let rbp = app.regs.rbp as usize;
+                    let has_rsp = rsp >= row_addr && rsp < row_addr + 16;
+                    let has_rbp = rbp >= row_addr && rbp < row_addr + 16;
+                    if has_rsp && has_rbp {
+                        suffix.push_str(" [RSP,RBP]");
+                    } else if has_rsp {
+                        suffix.push_str(" [RSP]");
+                    } else if has_rbp {
+                        suffix.push_str(" [RBP]");
+                    }
+                }
+
                 // Address offset label
-                ui.label(egui::RichText::new(format!("0x{:08X}", row_addr)).monospace().color(Color32::from_rgb(0, 206, 201)));
+                ui.label(egui::RichText::new(format!("0x{:08X}{}", row_addr, suffix)).monospace().color(Color32::from_rgb(0, 206, 201)));
 
                 // Hex bytes
                 for c in 0..16 {
@@ -76,8 +116,10 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     } else {
                         let label_text = format!("{:02X}", byte_val);
                         let label_color = if byte_val == 0 { Color32::from_rgb(99, 110, 114) } else { Color32::WHITE };
+                        let label = egui::RichText::new(label_text).monospace().color(label_color);
+                        let label = highlight_stack_cell(label, byte_addr, app);
                         let byte_label = ui.add(
-                            egui::Label::new(egui::RichText::new(label_text).monospace().color(label_color))
+                            egui::Label::new(label)
                                 .sense(egui::Sense::click())
                         );
                         if byte_label.clicked() {
@@ -88,17 +130,22 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 }
 
                 // ASCII representation
-                let mut ascii_rep = String::new();
-                for c in 0..16 {
-                    let idx = row_offset + c;
-                    let b = app.memory_data[idx];
-                    if (32..=126).contains(&b) {
-                        ascii_rep.push(b as char);
-                    } else {
-                        ascii_rep.push('.');
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    for c in 0..16 {
+                        let idx = row_offset + c;
+                        let b = app.memory_data[idx];
+                        let byte_addr = row_addr + c;
+                        let char_str = if (32..=126).contains(&b) {
+                            (b as char).to_string()
+                        } else {
+                            ".".to_string()
+                        };
+                        let label = egui::RichText::new(char_str).monospace().color(Color32::from_rgb(116, 185, 255));
+                        let label = highlight_stack_cell(label, byte_addr, app);
+                        ui.label(label);
                     }
-                }
-                ui.label(egui::RichText::new(ascii_rep).monospace().color(Color32::from_rgb(116, 185, 255)));
+                });
                 ui.end_row();
             }
         });
