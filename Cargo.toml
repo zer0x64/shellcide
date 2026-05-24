@@ -11,7 +11,7 @@ eframe = "0.29.0"
 keystone-engine = { version = "0.1.0", default-features = false, features = ["use-system-lib"] }
 
 # Disassembler
-iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder", "intel", "gas", "std"] }
+capstone = "0.14.0"
 
 # System APIs
 nix = { version = "0.27.1", features = ["ptrace", "signal", "user", "process", "mman", "fs"] }
