@@ -505,15 +505,12 @@ fn extract_arg_name(arg_type: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn dummy_app(bytes: Vec<u8>) -> ShellcideApp {
+impl ShellcideApp {
+    pub(crate) fn dummy(bytes: Vec<u8>) -> Self {
         let (cmd_tx, _) = crossbeam_channel::unbounded();
         let (_, event_rx) = crossbeam_channel::unbounded();
         let shared_pid = Arc::new(Mutex::new(None));
-        
-        ShellcideApp {
+        Self {
             code_input: String::new(),
             att_syntax: false,
             active_path: String::new(),
@@ -533,7 +530,7 @@ mod tests {
             active_tab: ConsoleTab::Console,
             mem_base_input: String::new(),
             memory_base_address: 0,
-            memory_data: Vec::new(),
+            memory_data: vec![0; 256],
             editing_register: None,
             register_input: String::new(),
             editing_memory_byte: None,
@@ -547,6 +544,15 @@ mod tests {
             left_bottom_tab: LeftBottomTab::Syscalls,
             struct_packer: StructPackerState::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_app(bytes: Vec<u8>) -> ShellcideApp {
+        ShellcideApp::dummy(bytes)
     }
 
     #[test]
