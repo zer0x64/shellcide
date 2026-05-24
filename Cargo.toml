@@ -8,7 +8,7 @@ edition = "2021"
 eframe = "0.29.0"
 
 # Assembler (Statically compiled from C source)
-keystone-engine = { version = "0.1.0", default-features = false, features = ["use-system-lib"] }
+asm-rs = "0.1.1"
 
 # Disassembler
 capstone = "0.14.0"

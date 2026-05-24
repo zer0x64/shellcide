@@ -66,37 +66,7 @@ impl ShellcideApp {
     ) -> Self {
         crate::ui::theme::apply_cyber_cyan_theme(&_cc.egui_ctx);
 
-        let default_code = r#"; Shellcide x86_64 Shellcode Demo
-; Writes "Hello, shellcide!" to stdout and exits with code 42.
-; Initial memory mapping:
-; - Code:  0x10000000
-; - Data:  0x20000000
-; - Stack: 0x30000000
-
-.intel_syntax noprefix
-.global _start
-
-_start:
-    ; 1. Write the string into the data section
-    mov rsi, 0x20000000            ; Target data section address
-    mov dword ptr [rsi], 0x6c6c6548     ; "Hell"
-    mov dword ptr [rsi+4], 0x73202c6f   ; "o, s"
-    mov dword ptr [rsi+8], 0x6c6c6568   ; "hell"
-    mov dword ptr [rsi+12], 0x65646963  ; "cide"
-    mov byte ptr [rsi+16], 0x21         ; "!"
-    mov byte ptr [rsi+17], 0x0a         ; "\n"
-
-    ; 2. Call sys_write (rax=1, rdi=1, rsi=buffer, rdx=18)
-    mov rax, 1
-    mov rdi, 1
-    mov rdx, 18
-    syscall
-
-    ; 3. Call sys_exit (rax=60, rdi=42)
-    mov rax, 60
-    mov rdi, 42
-    syscall
-"#;
+        let default_code = crate::assembler::DEMO_CODE;
 
         Self {
             code_input: default_code.to_string(),
