@@ -94,25 +94,7 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             .desired_width(120.0)
                     );
                     if text_edit.lost_focus() || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                        let mut parsed_val = None;
-                        let clean_input = app.register_input.trim();
-                        if clean_input.starts_with("0x") || clean_input.starts_with("0X") {
-                            if let Ok(v) = u64::from_str_radix(&clean_input[2..], 16) {
-                                parsed_val = Some(v);
-                            }
-                        } else if clean_input.ends_with('h') || clean_input.ends_with('H') {
-                            if let Ok(v) = u64::from_str_radix(&clean_input[..clean_input.len()-1], 16) {
-                                parsed_val = Some(v);
-                            }
-                        } else {
-                            if let Ok(v) = clean_input.parse::<u64>() {
-                                parsed_val = Some(v);
-                            } else if let Ok(v) = u64::from_str_radix(clean_input, 16) {
-                                parsed_val = Some(v);
-                            }
-                        }
-
-                        if let Some(v) = parsed_val {
+                        if let Some(v) = crate::ui::parse_u64_input(&app.register_input) {
                             match name {
                                 "rax" => app.regs.rax = v, "rbx" => app.regs.rbx = v,
                                 "rcx" => app.regs.rcx = v, "rdx" => app.regs.rdx = v,

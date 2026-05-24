@@ -1,4 +1,5 @@
 use asm_rs::{Assembler, Arch, Syntax};
+use crate::app::TargetArch;
 
 fn strip_comments(code: &str) -> String {
     let mut clean_lines = Vec::new();
@@ -32,12 +33,21 @@ fn strip_comments(code: &str) -> String {
 /// * `code` - The assembly source code string.
 /// * `base_address` - The base address where the code will be loaded in memory.
 /// * `att_syntax` - If true, uses AT&T syntax. Otherwise, uses Intel syntax.
-pub fn assemble(code: &str, base_address: u64, att_syntax: bool) -> Result<Vec<u8>, String> {
+pub fn assemble(code: &str, base_address: u64, att_syntax: bool, arch: TargetArch) -> Result<Vec<u8>, String> {
     // Strip comments to prevent assembler parsing errors
     let clean_code = strip_comments(code);
 
-    // Initialize Assembler for x86_64
-    let mut assembler = Assembler::new(Arch::X86_64);
+    let asm_arch = match arch {
+        TargetArch::X86_64 => Arch::X86_64,
+        TargetArch::X86 => Arch::X86,
+        TargetArch::Arm => Arch::Arm,
+        TargetArch::Thumb => Arch::Thumb,
+        TargetArch::Aarch64 => Arch::Aarch64,
+        TargetArch::Riscv => Arch::Rv64,
+    };
+
+    // Initialize Assembler
+    let mut assembler = Assembler::new(asm_arch);
 
     if att_syntax {
         assembler.syntax(Syntax::Att);
@@ -170,21 +180,21 @@ mod tests {
     #[test]
     fn test_assembler_intel() {
         let code = "mov rax, 10";
-        let res = assemble(code, 0x10000000, false).unwrap();
+        let res = assemble(code, 0x10000000, false, TargetArch::X86_64).unwrap();
         assert_eq!(res, vec![0xB8, 0x0A, 0x00, 0x00, 0x00]);
     }
 
     #[test]
     fn test_assembler_att() {
         let code = "movq $0xa, %rax";
-        let res = assemble(code, 0x10000000, true).unwrap();
+        let res = assemble(code, 0x10000000, true, TargetArch::X86_64).unwrap();
         assert_eq!(res, vec![0xB8, 0x0A, 0x00, 0x00, 0x00]);
     }
 
     #[test]
     fn test_assembler_with_comments() {
         let code = "mov rax, 10 ; load 10 into rax\n; whole line comment\nmov rbx, 20";
-        let res = assemble(code, 0x10000000, false).unwrap();
+        let res = assemble(code, 0x10000000, false, TargetArch::X86_64).unwrap();
         assert!(!res.is_empty());
     }
 
@@ -223,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_demo_code_compilation() {
-        let res = assemble(DEMO_CODE, 0x10000000, false);
+        let res = assemble(DEMO_CODE, 0x10000000, false, TargetArch::X86_64);
         assert!(res.is_ok(), "Compilation failed: {:?}", res.err());
     }
 }

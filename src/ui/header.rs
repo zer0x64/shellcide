@@ -1,11 +1,15 @@
 use eframe::egui::{self, Color32};
-use crate::app::ShellcideApp;
+use crate::app::{ShellcideApp, TargetArch};
 
 pub fn render_header_panel(app: &mut ShellcideApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
         ui.horizontal(|ui| {
+            let title = match app.target_arch {
+                TargetArch::X86_64 => "SHELLCIDE // X86_64 IDE & DEBUGGER".to_string(),
+                other => format!("SHELLCIDE // {:?} IDE", other).to_uppercase(),
+            };
             ui.heading(
-                egui::RichText::new("SHELLCIDE // X86_64 ASSEMBLER IDE & DEBUGGER")
+                egui::RichText::new(title)
                     .color(Color32::from_rgb(0, 206, 201))
                     .strong()
             );
@@ -41,6 +45,26 @@ pub fn render_header_panel(app: &mut ShellcideApp, ctx: &egui::Context) {
             ui.checkbox(&mut app.att_syntax, "AT&T (GNU syntax)");
             if old_att != app.att_syntax {
                 app.log(&format!("[Syntax] Switched to {}", if app.att_syntax { "AT&T" } else { "Intel" }));
+            }
+
+            ui.separator();
+
+            // Architecture selector
+            ui.label("Arch:");
+            let old_arch = app.target_arch;
+            egui::ComboBox::from_id_salt("arch_combo")
+                .selected_text(format!("{:?}", app.target_arch))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut app.target_arch, TargetArch::X86_64, "X86_64");
+                    ui.selectable_value(&mut app.target_arch, TargetArch::X86, "X86");
+                    ui.selectable_value(&mut app.target_arch, TargetArch::Arm, "Arm");
+                    ui.selectable_value(&mut app.target_arch, TargetArch::Thumb, "Thumb");
+                    ui.selectable_value(&mut app.target_arch, TargetArch::Aarch64, "Aarch64");
+                    ui.selectable_value(&mut app.target_arch, TargetArch::Riscv, "Riscv");
+                });
+            if old_arch != app.target_arch {
+                app.log(&format!("[Arch] Switched architecture to {:?}", app.target_arch));
+                app.do_assemble();
             }
         });
     });

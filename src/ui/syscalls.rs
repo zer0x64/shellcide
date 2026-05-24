@@ -109,35 +109,13 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     let r8_arg = get_arg_by_reg(s, "%r8");
                     let r9_arg = get_arg_by_reg(s, "%r9");
 
-                    if rdi_arg.is_empty() {
-                        ui.label(egui::RichText::new("-").weak());
-                    } else {
-                        ui.label(egui::RichText::new(rdi_arg).monospace());
-                    }
-                    if rsi_arg.is_empty() {
-                        ui.label(egui::RichText::new("-").weak());
-                    } else {
-                        ui.label(egui::RichText::new(rsi_arg).monospace());
-                    }
-                    if rdx_arg.is_empty() {
-                        ui.label(egui::RichText::new("-").weak());
-                    } else {
-                        ui.label(egui::RichText::new(rdx_arg).monospace());
-                    }
-                    if r10_arg.is_empty() {
-                        ui.label(egui::RichText::new("-").weak());
-                    } else {
-                        ui.label(egui::RichText::new(r10_arg).monospace());
-                    }
-                    if r8_arg.is_empty() {
-                        ui.label(egui::RichText::new("-").weak());
-                    } else {
-                        ui.label(egui::RichText::new(r8_arg).monospace());
-                    }
-                    if r9_arg.is_empty() {
-                        ui.label(egui::RichText::new("-").weak());
-                    } else {
-                        ui.label(egui::RichText::new(r9_arg).monospace());
+                    let args = [rdi_arg, rsi_arg, rdx_arg, r10_arg, r8_arg, r9_arg];
+                    for arg in args {
+                        if arg.is_empty() {
+                            ui.label(egui::RichText::new("-").weak());
+                        } else {
+                            ui.label(egui::RichText::new(arg).monospace());
+                        }
                     }
 
                     ui.end_row();

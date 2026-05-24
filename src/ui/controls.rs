@@ -1,5 +1,5 @@
 use eframe::egui::{self, Color32};
-use crate::app::{ShellcideApp, ConsoleTab};
+use crate::app::{ShellcideApp, ConsoleTab, TargetArch};
 use crate::debugger::DebuggerCommand;
 
 fn highlight_if(mut text: egui::RichText, cond: bool) -> egui::RichText {
@@ -9,6 +9,13 @@ fn highlight_if(mut text: egui::RichText, cond: bool) -> egui::RichText {
     text
 }
 
+fn dbg_button(ui: &mut egui::Ui, enabled: bool, text: &str, fill: Color32) -> egui::Response {
+    ui.add_enabled(
+        enabled,
+        egui::Button::new(egui::RichText::new(text).strong().color(Color32::BLACK)).fill(fill)
+    )
+}
+
 pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     ui.heading("Debugger Controls");
     ui.separator();
@@ -16,74 +23,78 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     // Command buttons
     ui.horizontal(|ui| {
         // Assemble Code
-        let compile_btn = ui.add(
-            egui::Button::new(egui::RichText::new("⚙ Assemble").strong().color(Color32::BLACK))
-                .fill(Color32::from_rgb(116, 185, 255))
-        );
+        let compile_btn = dbg_button(ui, true, "⚙ Assemble", Color32::from_rgb(116, 185, 255));
         if compile_btn.clicked() {
             app.do_assemble();
         }
 
-        ui.separator();
+        if app.target_arch == TargetArch::X86_64 {
+            ui.separator();
 
-        // Run/Start
-        let run_enabled = !app.disassembly.is_empty();
-        let start_btn = ui.add_enabled(
-            run_enabled && !app.is_running,
-            egui::Button::new(egui::RichText::new("▶ Run / Debug").strong().color(Color32::BLACK))
-                .fill(Color32::from_rgb(85, 239, 196))
-        );
-        if start_btn.clicked() {
-            app.log("[+] Spawning tracee process in background...");
-            let patches = Vec::new(); // Initial memory patches (if any)
-            let bps = app.breakpoints.iter().cloned().collect();
-            let file_bytes = app.compiled_bytes.clone();
-            app.cmd_tx.send(DebuggerCommand::Start {
-                code: file_bytes,
-                initial_regs: app.regs,
-                memory_patches: patches,
-                breakpoints: bps,
-            }).unwrap();
-        }
+            // Run/Start
+            let run_enabled = !app.disassembly.is_empty();
+            let start_btn = dbg_button(
+                ui,
+                run_enabled && !app.is_running,
+                "▶ Run / Debug",
+                Color32::from_rgb(85, 239, 196)
+            );
+            if start_btn.clicked() {
+                app.log("[+] Spawning tracee process in background...");
+                let patches = Vec::new(); // Initial memory patches (if any)
+                let bps = app.breakpoints.iter().cloned().collect();
+                let file_bytes = app.compiled_bytes.clone();
+                app.cmd_tx.send(DebuggerCommand::Start {
+                    code: file_bytes,
+                    initial_regs: app.regs,
+                    memory_patches: patches,
+                    breakpoints: bps,
+                }).unwrap();
+            }
 
-        // Step Into
-        let step_btn = ui.add_enabled(
-            app.is_running && app.is_stopped,
-            egui::Button::new(egui::RichText::new("➡ Step Into").strong().color(Color32::BLACK))
-                .fill(Color32::from_rgb(253, 121, 168))
-        );
-        if step_btn.clicked() {
-            app.cmd_tx.send(DebuggerCommand::Step).unwrap();
-        }
+            // Step Into
+            let step_btn = dbg_button(
+                ui,
+                app.is_running && app.is_stopped,
+                "➡ Step Into",
+                Color32::from_rgb(253, 121, 168)
+            );
+            if step_btn.clicked() {
+                app.cmd_tx.send(DebuggerCommand::Step).unwrap();
+            }
 
-        // Continue
-        let cont_btn = ui.add_enabled(
-            app.is_running && app.is_stopped,
-            egui::Button::new(egui::RichText::new("⏩ Continue").strong().color(Color32::BLACK))
-                .fill(Color32::from_rgb(0, 206, 201))
-        );
-        if cont_btn.clicked() {
-            app.cmd_tx.send(DebuggerCommand::Continue).unwrap();
-        }
+            // Continue
+            let cont_btn = dbg_button(
+                ui,
+                app.is_running && app.is_stopped,
+                "⏩ Continue",
+                Color32::from_rgb(0, 206, 201)
+            );
+            if cont_btn.clicked() {
+                app.cmd_tx.send(DebuggerCommand::Continue).unwrap();
+            }
 
-        // Pause
-        let pause_btn = ui.add_enabled(
-            app.is_running && !app.is_stopped,
-            egui::Button::new(egui::RichText::new("⏸ Pause").strong().color(Color32::BLACK))
-                .fill(Color32::from_rgb(254, 202, 87))
-        );
-        if pause_btn.clicked() {
-            app.cmd_tx.send(DebuggerCommand::Pause).unwrap();
-        }
+            // Pause
+            let pause_btn = dbg_button(
+                ui,
+                app.is_running && !app.is_stopped,
+                "⏸ Pause",
+                Color32::from_rgb(254, 202, 87)
+            );
+            if pause_btn.clicked() {
+                app.cmd_tx.send(DebuggerCommand::Pause).unwrap();
+            }
 
-        // Terminate
-        let stop_btn = ui.add_enabled(
-            app.is_running,
-            egui::Button::new(egui::RichText::new("⏹ Stop").strong().color(Color32::BLACK))
-                .fill(Color32::from_rgb(255, 118, 117))
-        );
-        if stop_btn.clicked() {
-            app.cmd_tx.send(DebuggerCommand::Terminate).unwrap();
+            // Terminate
+            let stop_btn = dbg_button(
+                ui,
+                app.is_running,
+                "⏹ Stop",
+                Color32::from_rgb(255, 118, 117)
+            );
+            if stop_btn.clicked() {
+                app.cmd_tx.send(DebuggerCommand::Terminate).unwrap();
+            }
         }
     });
 
@@ -105,39 +116,43 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             ui.colored_label(Color32::GRAY, "(Assemble shellcode to view disassembly)");
         } else {
             let bad_chars = crate::assembler::parse_bad_characters(&app.bad_chars_input);
-            egui::Grid::new("disasm_grid").num_columns(6).spacing([8.0, 4.0]).show(ui, |ui| {
+            let is_native = app.target_arch == TargetArch::X86_64;
+            let num_columns = if is_native { 6 } else { 4 };
+            egui::Grid::new("disasm_grid").num_columns(num_columns).spacing([8.0, 4.0]).show(ui, |ui| {
                 for inst in app.disassembly.clone() {
                     let addr = inst.address as usize;
                     let is_current = app.is_running && app.regs.rip == inst.address;
                     let has_bp = app.breakpoints.contains(&addr);
 
-                    // 1. Breakpoint margin toggle button
-                    let bp_text = if has_bp { "🔴" } else { "  " };
-                    let bp_rich = highlight_if(egui::RichText::new(bp_text).monospace(), is_current);
-                    let bp_btn = ui.add(
-                        egui::Button::new(bp_rich)
-                            .frame(false)
-                    );
-                    if bp_btn.clicked() {
-                        if has_bp {
-                            app.breakpoints.remove(&addr);
-                            app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, false)).unwrap();
-                            app.log(&format!("[Breakpoint] Removed at 0x{:08X}", addr));
-                        } else {
-                            app.breakpoints.insert(addr);
-                            app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, true)).unwrap();
-                            app.log(&format!("[Breakpoint] Added at 0x{:08X}", addr));
+                    if is_native {
+                        // 1. Breakpoint margin toggle button
+                        let bp_text = if has_bp { "🔴" } else { "  " };
+                        let bp_rich = highlight_if(egui::RichText::new(bp_text).monospace(), is_current);
+                        let bp_btn = ui.add(
+                            egui::Button::new(bp_rich)
+                                .frame(false)
+                        );
+                        if bp_btn.clicked() {
+                            if has_bp {
+                                app.breakpoints.remove(&addr);
+                                app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, false)).unwrap();
+                                app.log(&format!("[Breakpoint] Removed at 0x{:08X}", addr));
+                            } else {
+                                app.breakpoints.insert(addr);
+                                app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, true)).unwrap();
+                                app.log(&format!("[Breakpoint] Added at 0x{:08X}", addr));
+                            }
+                            app.sync_code_from_breakpoints();
                         }
-                        app.sync_code_from_breakpoints();
-                    }
 
-                    // 2. Active RIP indicator arrow
-                    let rip_indicator = if is_current { "👉" } else { "  " };
-                    let rip_rich = highlight_if(
-                        egui::RichText::new(rip_indicator).monospace().strong().color(Color32::from_rgb(0, 206, 201)),
-                        is_current
-                    );
-                    ui.label(rip_rich);
+                        // 2. Active RIP indicator arrow
+                        let rip_indicator = if is_current { "👉" } else { "  " };
+                        let rip_rich = highlight_if(
+                            egui::RichText::new(rip_indicator).monospace().strong().color(Color32::from_rgb(0, 206, 201)),
+                            is_current
+                        );
+                        ui.label(rip_rich);
+                    }
 
                     // 3. Instruction address
                     let addr_color = if is_current { Color32::from_rgb(0, 206, 201) } else { Color32::GRAY };

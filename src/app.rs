@@ -9,10 +9,27 @@ use crate::assembler::assemble;
 use crate::disassembler::{disassemble_code, DisassembledInstruction};
 use crate::ui::struct_packer::{LeftBottomTab, StructPackerState};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetArch {
+    X86_64,
+    X86,
+    Arm,
+    Thumb,
+    Aarch64,
+    Riscv,
+}
+
+impl Default for TargetArch {
+    fn default() -> Self {
+        TargetArch::X86_64
+    }
+}
+
 pub struct ShellcideApp {
     // Code input and settings
     pub(crate) code_input: String,
     pub(crate) att_syntax: bool,
+    pub(crate) target_arch: TargetArch,
     pub(crate) active_path: String,
 
     // Thread communication
@@ -79,6 +96,7 @@ impl ShellcideApp {
         Self {
             code_input: default_code.to_string(),
             att_syntax: false,
+            target_arch: TargetArch::X86_64,
             active_path: "demo.s".to_string(),
             cmd_tx,
             event_rx,
@@ -178,7 +196,7 @@ impl ShellcideApp {
     pub(crate) fn do_assemble(&mut self) {
         self.bad_char_lines.clear();
         self.log("[+] Assembling shellcode...");
-        match assemble(&self.code_input, CODE_BASE as u64, self.att_syntax) {
+        match assemble(&self.code_input, CODE_BASE as u64, self.att_syntax, self.target_arch) {
             Ok(bytes) => {
                 self.log(&format!("[✓] Shellcode compiled successfully. Size: {} bytes.", bytes.len()));
                 
@@ -201,7 +219,7 @@ impl ShellcideApp {
                 }
 
                 self.compiled_bytes = bytes.clone();
-                self.disassembly = disassemble_code(&bytes, CODE_BASE as u64, self.att_syntax);
+                self.disassembly = disassemble_code(&bytes, CODE_BASE as u64, self.att_syntax, self.target_arch);
                 
                 // Calculate which lines contain bad characters
                 if !bad_chars.is_empty() {
@@ -452,15 +470,17 @@ impl eframe::App for ShellcideApp {
             });
 
         // Right Panel (Registers & Memory)
-        egui::SidePanel::right("right_panel")
-            .resizable(true)
-            .min_width(200.0)
-            .default_width(450.0)
-            .show(ctx, |ui| {
-                crate::ui::registers::render_registers_panel(self, ui);
-                ui.separator();
-                crate::ui::memory::render_memory_panel(self, ui);
-            });
+        if self.target_arch == TargetArch::X86_64 {
+            egui::SidePanel::right("right_panel")
+                .resizable(true)
+                .min_width(200.0)
+                .default_width(450.0)
+                .show(ctx, |ui| {
+                    crate::ui::registers::render_registers_panel(self, ui);
+                    ui.separator();
+                    crate::ui::memory::render_memory_panel(self, ui);
+                });
+        }
 
         // Center Panel (Controls, Disassembly, Logs Console)
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -475,36 +495,6 @@ impl eframe::App for ShellcideApp {
 }
 
 #[cfg(test)]
-fn extract_arg_name(arg_type: &str) -> &str {
-    let trimmed = arg_type.trim();
-    if trimmed.is_empty() {
-        return "";
-    }
-    let parts: Vec<&str> = trimmed.split_whitespace().collect();
-    if parts.is_empty() {
-        return "";
-    }
-    let last = parts[parts.len() - 1];
-    let mut name = last;
-    while name.starts_with('*') {
-        name = &name[1..];
-    }
-    if name.is_empty() {
-        for part in parts.iter().rev().skip(1) {
-            let mut p = *part;
-            while p.starts_with('*') {
-                p = &p[1..];
-            }
-            if !p.is_empty() && p != "const" && p != "struct" {
-                return p;
-            }
-        }
-        return arg_type;
-    }
-    name
-}
-
-#[cfg(test)]
 impl ShellcideApp {
     pub(crate) fn dummy(bytes: Vec<u8>) -> Self {
         let (cmd_tx, _) = crossbeam_channel::unbounded();
@@ -513,6 +503,7 @@ impl ShellcideApp {
         Self {
             code_input: String::new(),
             att_syntax: false,
+            target_arch: TargetArch::X86_64,
             active_path: String::new(),
             cmd_tx,
             event_rx,
@@ -602,6 +593,7 @@ mod tests {
 
     #[test]
     fn test_extract_arg_name() {
+        use crate::ui::syscalls::extract_arg_name;
         assert_eq!(extract_arg_name("unsigned int fd"), "fd");
         assert_eq!(extract_arg_name("char *buf"), "buf");
         assert_eq!(extract_arg_name("const char *filename"), "filename");

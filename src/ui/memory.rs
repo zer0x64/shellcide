@@ -27,14 +27,7 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         let text_edit = ui.add(egui::TextEdit::singleline(&mut app.mem_base_input).desired_width(120.0));
         
         if text_edit.lost_focus() || ui.button("Go").clicked() {
-            let clean = app.mem_base_input.trim();
-            let parsed = if clean.starts_with("0x") || clean.starts_with("0X") {
-                usize::from_str_radix(&clean[2..], 16).ok()
-            } else {
-                clean.parse::<usize>().ok().or_else(|| usize::from_str_radix(clean, 16).ok())
-            };
-
-            if let Some(addr) = parsed {
+            if let Some(addr) = crate::ui::parse_u64_input(&app.mem_base_input).map(|v| v as usize) {
                 app.memory_base_address = addr;
                 app.refresh_memory();
             } else {

@@ -1,5 +1,5 @@
 use eframe::egui::{self, Color32};
-use crate::app::ShellcideApp;
+use crate::app::{ShellcideApp, TargetArch};
 use crate::debugger::DebuggerCommand;
 
 fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax: bool) -> String {
@@ -223,6 +223,7 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     ui.add_space(margin_top);
                     
                     let lines_count = app.code_input.lines().count().max(1);
+                    let is_native = app.target_arch == TargetArch::X86_64;
                     for i in 0..lines_count {
                         let has_bp = app.editor_breakpoints.contains(&i);
                         
@@ -231,43 +232,40 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             egui::Sense::click()
                         );
                         
-                        if response.clicked() {
+                        if is_native && response.clicked() {
                             let line_to_inst = app.get_line_to_inst_mapping();
-                            let mut resolved_addr = None;
-                            if let Some(&inst_idx) = line_to_inst.get(&i) {
-                                if inst_idx < app.disassembly.len() {
-                                    resolved_addr = Some(app.disassembly[inst_idx].address as usize);
-                                }
-                            }
+                            let resolved_addr = line_to_inst.get(&i)
+                                .and_then(|&idx| app.disassembly.get(idx))
+                                .map(|inst| inst.address as usize);
 
-                            if app.editor_breakpoints.contains(&i) {
+                            let was_present = app.editor_breakpoints.contains(&i);
+                            if was_present {
                                 app.editor_breakpoints.remove(&i);
-                                if let Some(addr) = resolved_addr {
-                                    app.breakpoints.remove(&addr);
-                                    app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, false)).ok();
-                                    app.log(&format!("[Breakpoint] Removed at line {}, 0x{:08X}", i + 1, addr));
-                                } else {
-                                    app.log(&format!("[Breakpoint] Removed at line {}", i + 1));
-                                }
                             } else {
                                 app.editor_breakpoints.insert(i);
-                                if let Some(addr) = resolved_addr {
-                                    app.breakpoints.insert(addr);
-                                    app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, true)).ok();
-                                    app.log(&format!("[Breakpoint] Added at line {}, 0x{:08X}", i + 1, addr));
+                            }
+
+                            let action = if was_present { "Removed" } else { "Added" };
+                            if let Some(addr) = resolved_addr {
+                                if was_present {
+                                    app.breakpoints.remove(&addr);
                                 } else {
-                                    app.log(&format!("[Breakpoint] Added at line {}", i + 1));
+                                    app.breakpoints.insert(addr);
                                 }
+                                app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, !was_present)).ok();
+                                app.log(&format!("[Breakpoint] {} at line {}, 0x{:08X}", action, i + 1, addr));
+                            } else {
+                                app.log(&format!("[Breakpoint] {} at line {}", action, i + 1));
                             }
                         }
                         
-                        let text_color = if has_bp {
+                        let text_color = if is_native && has_bp {
                             Color32::from_rgb(255, 118, 117)
                         } else {
                             Color32::from_rgb(99, 110, 114)
                         };
                         
-                        let bp_char = if has_bp { "● " } else { "  " };
+                        let bp_char = if is_native && has_bp { "● " } else { "  " };
                         let warn_char = if app.bad_char_lines.contains(&i) { "⚠️ " } else { "  " };
                         let label = format!("{}{}{:>2}", bp_char, warn_char, i + 1);
                         
