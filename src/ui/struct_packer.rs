@@ -98,11 +98,7 @@ impl StructPackerState {
                     ),
                 ];
 
-                let lines_ref: Vec<(&str, &str, &str)> = lines.iter()
-                    .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
-                    .collect();
-
-                let assembly = format_assembly_block(&lines_ref, att_syntax, &format!("sockaddr_in (IPv4: {}, Port: {})", ip, self.ipv4_port));
+                let assembly = format_owned_assembly_block(&lines, att_syntax, &format!("sockaddr_in (IPv4: {}, Port: {})", ip, self.ipv4_port));
 
                 Ok(PackedResult {
                     full_bytes: bytes.clone(),
@@ -159,11 +155,7 @@ impl StructPackerState {
                     ),
                 ];
 
-                let lines_ref: Vec<(&str, &str, &str)> = lines.iter()
-                    .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
-                    .collect();
-
-                let assembly = format_assembly_block(&lines_ref, att_syntax, &format!("sockaddr_in6 (IPv6: {}, Port: {})", ip, self.ipv6_port));
+                let assembly = format_owned_assembly_block(&lines, att_syntax, &format!("sockaddr_in6 (IPv6: {}, Port: {})", ip, self.ipv6_port));
 
                 Ok(PackedResult {
                     full_bytes: bytes.clone(),
@@ -220,11 +212,7 @@ impl StructPackerState {
                     ),
                 ];
 
-                let lines_full_ref: Vec<(&str, &str, &str)> = lines_full.iter()
-                    .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
-                    .collect();
-
-                let assembly_full = format_assembly_block(&lines_full_ref, att_syntax, &format!("sockaddr_un (Unix: {}) - Full 110-byte struct", self.unix_path));
+                let assembly_full = format_owned_assembly_block(&lines_full, att_syntax, &format!("sockaddr_un (Unix: {}) - Full 110-byte struct", self.unix_path));
 
                 // Minimal assembly representation
                 let min_path_str = path_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
@@ -241,11 +229,7 @@ impl StructPackerState {
                     ),
                 ];
 
-                let lines_min_ref: Vec<(&str, &str, &str)> = lines_min.iter()
-                    .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
-                    .collect();
-
-                let assembly_minimal = format_assembly_block(&lines_min_ref, att_syntax, &format!("sockaddr_un (Unix: {}) - Minimal {} bytes", self.unix_path, minimal_len));
+                let assembly_minimal = format_owned_assembly_block(&lines_min, att_syntax, &format!("sockaddr_un (Unix: {}) - Minimal {} bytes", self.unix_path, minimal_len));
 
                 Ok(PackedResult {
                     full_bytes,
@@ -283,15 +267,11 @@ impl StructPackerState {
                     (
                         format!("db {}", full_data_str),
                         format!(".byte {}", full_data_str),
-                        format!("sa_data = (padded to 14 bytes)"),
+                        "sa_data = (padded to 14 bytes)".to_string(),
                     ),
                 ];
 
-                let lines_full_ref: Vec<(&str, &str, &str)> = lines_full.iter()
-                    .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
-                    .collect();
-
-                let assembly_full = format_assembly_block(&lines_full_ref, att_syntax, &format!("sockaddr (Generic) - Full 16-byte struct"));
+                let assembly_full = format_owned_assembly_block(&lines_full, att_syntax, "sockaddr (Generic) - Full 16-byte struct");
 
                 // Minimal assembly
                 let min_data_str = data_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
@@ -308,11 +288,7 @@ impl StructPackerState {
                     ),
                 ];
 
-                let lines_min_ref: Vec<(&str, &str, &str)> = lines_min.iter()
-                    .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
-                    .collect();
-
-                let assembly_minimal = format_assembly_block(&lines_min_ref, att_syntax, &format!("sockaddr (Generic) - Minimal {} bytes", minimal_len));
+                let assembly_minimal = format_owned_assembly_block(&lines_min, att_syntax, &format!("sockaddr (Generic) - Minimal {} bytes", minimal_len));
 
                 Ok(PackedResult {
                     full_bytes,
@@ -323,6 +299,17 @@ impl StructPackerState {
             }
         }
     }
+}
+
+fn format_owned_assembly_block(
+    lines: &[(String, String, String)],
+    att_syntax: bool,
+    description: &str,
+) -> String {
+    let lines_ref: Vec<(&str, &str, &str)> = lines.iter()
+        .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
+        .collect();
+    format_assembly_block(&lines_ref, att_syntax, description)
 }
 
 fn format_assembly_block(
@@ -398,7 +385,7 @@ fn parse_escaped_string(s: &str) -> Result<Vec<u8>, String> {
 fn parse_hex_string(s: &str) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     let cleaned: String = s.chars().filter(|c| !c.is_whitespace() && *c != ',').collect();
-    if cleaned.len() % 2 != 0 {
+    if !cleaned.len().is_multiple_of(2) {
         return Err("Hex string must have an even number of characters".to_string());
     }
     for chunk in cleaned.as_bytes().chunks(2) {
@@ -656,10 +643,12 @@ mod tests {
 
     #[test]
     fn test_pack_sockaddr_in() {
-        let mut state = StructPackerState::default();
-        state.selected_struct = StructType::SockAddrIn;
-        state.ipv4_addr = "127.0.0.1".to_string();
-        state.ipv4_port = 4444;
+        let state = StructPackerState {
+            selected_struct: StructType::SockAddrIn,
+            ipv4_addr: "127.0.0.1".to_string(),
+            ipv4_port: 4444,
+            ..Default::default()
+        };
 
         let res = state.pack(false).unwrap();
         assert_eq!(res.full_bytes.len(), 16);
@@ -671,12 +660,14 @@ mod tests {
 
     #[test]
     fn test_pack_sockaddr_in6() {
-        let mut state = StructPackerState::default();
-        state.selected_struct = StructType::SockAddrIn6;
-        state.ipv6_addr = "::1".to_string();
-        state.ipv6_port = 8080;
-        state.ipv6_flowinfo = 0;
-        state.ipv6_scope_id = 0;
+        let state = StructPackerState {
+            selected_struct: StructType::SockAddrIn6,
+            ipv6_addr: "::1".to_string(),
+            ipv6_port: 8080,
+            ipv6_flowinfo: 0,
+            ipv6_scope_id: 0,
+            ..Default::default()
+        };
 
         let res = state.pack(false).unwrap();
         assert_eq!(res.full_bytes.len(), 28);
@@ -692,10 +683,12 @@ mod tests {
 
     #[test]
     fn test_pack_sockaddr_un() {
-        let mut state = StructPackerState::default();
-        state.selected_struct = StructType::SockAddrUn;
-        state.unix_path = "abc".to_string();
-        state.unix_abstract = true;
+        let state = StructPackerState {
+            selected_struct: StructType::SockAddrUn,
+            unix_path: "abc".to_string(),
+            unix_abstract: true,
+            ..Default::default()
+        };
 
         let res = state.pack(false).unwrap();
         assert_eq!(res.full_bytes.len(), 110);

@@ -10,7 +10,7 @@ fn highlight_stack_cell(mut label: egui::RichText, byte_addr: usize, app: &Shell
             label = label.background_color(Color32::from_rgba_unmultiplied(253, 121, 168, 120));
         } else if byte_addr == rbp {
             label = label.background_color(Color32::from_rgba_unmultiplied(162, 155, 254, 120));
-        } else if byte_addr > rsp && byte_addr < rbp {
+        } else if (rsp + 1..rbp).contains(&byte_addr) {
             label = label.background_color(Color32::from_rgba_unmultiplied(253, 121, 168, 30));
         }
     }
@@ -69,8 +69,8 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 if app.is_running && app.is_stopped {
                     let rsp = app.regs.rsp as usize;
                     let rbp = app.regs.rbp as usize;
-                    let has_rsp = rsp >= row_addr && rsp < row_addr + 16;
-                    let has_rbp = rbp >= row_addr && rbp < row_addr + 16;
+                    let has_rsp = (row_addr..row_addr + 16).contains(&rsp);
+                    let has_rbp = (row_addr..row_addr + 16).contains(&rbp);
                     if has_rsp && has_rbp {
                         suffix.push_str(" [RSP,RBP]");
                     } else if has_rsp {
@@ -86,7 +86,7 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 // Hex bytes
                 for c in 0..16 {
                     let idx = row_offset + c;
-                    let byte_val = app.memory_data[idx];
+                    let byte_val = app.memory_data.get(idx).copied().unwrap_or(0);
                     let byte_addr = row_addr + c;
 
                     if app.editing_memory_byte == Some(idx) {
@@ -98,7 +98,9 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         );
                         if text_edit.lost_focus() || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                             if let Ok(v) = u8::from_str_radix(app.memory_byte_input.trim(), 16) {
-                                app.memory_data[idx] = v;
+                                if let Some(b) = app.memory_data.get_mut(idx) {
+                                    *b = v;
+                                }
                                 if app.is_running && app.is_stopped {
                                     app.cmd_tx.send(DebuggerCommand::WriteMemory(byte_addr, vec![v])).unwrap();
                                     app.log(&format!("[Debugger] Wrote byte 0x{:02X} to memory address 0x{:X}", v, byte_addr));
@@ -127,7 +129,7 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     ui.spacing_mut().item_spacing.x = 0.0;
                     for c in 0..16 {
                         let idx = row_offset + c;
-                        let b = app.memory_data[idx];
+                        let b = app.memory_data.get(idx).copied().unwrap_or(0);
                         let byte_addr = row_addr + c;
                         let char_str = if (32..=126).contains(&b) {
                             (b as char).to_string()

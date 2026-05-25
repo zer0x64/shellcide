@@ -117,9 +117,10 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         } else {
             let bad_chars = crate::assembler::parse_bad_characters(&app.bad_chars_input);
             let is_native = app.target_arch == TargetArch::X86_64;
+            let mut clicked_bp = None;
             let num_columns = if is_native { 6 } else { 4 };
             egui::Grid::new("disasm_grid").num_columns(num_columns).spacing([8.0, 4.0]).show(ui, |ui| {
-                for inst in app.disassembly.clone() {
+                for inst in &app.disassembly {
                     let addr = inst.address as usize;
                     let is_current = app.is_running && app.regs.rip == inst.address;
                     let has_bp = app.breakpoints.contains(&addr);
@@ -133,16 +134,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                 .frame(false)
                         );
                         if bp_btn.clicked() {
-                            if has_bp {
-                                app.breakpoints.remove(&addr);
-                                app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, false)).unwrap();
-                                app.log(&format!("[Breakpoint] Removed at 0x{:08X}", addr));
-                            } else {
-                                app.breakpoints.insert(addr);
-                                app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, true)).unwrap();
-                                app.log(&format!("[Breakpoint] Added at 0x{:08X}", addr));
-                            }
-                            app.sync_code_from_breakpoints();
+                            clicked_bp = Some((addr, has_bp));
                         }
 
                         // 2. Active RIP indicator arrow
@@ -204,6 +196,19 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     ui.end_row();
                 }
             });
+
+            if let Some((addr, has_bp)) = clicked_bp {
+                if has_bp {
+                    app.breakpoints.remove(&addr);
+                    app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, false)).unwrap();
+                    app.log(&format!("[Breakpoint] Removed at 0x{:08X}", addr));
+                } else {
+                    app.breakpoints.insert(addr);
+                    app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, true)).unwrap();
+                    app.log(&format!("[Breakpoint] Added at 0x{:08X}", addr));
+                }
+                app.sync_code_from_breakpoints();
+            }
         }
     });
 

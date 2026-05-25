@@ -102,15 +102,9 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     }
 
                     // Arguments (RDI, RSI, RDX, R10, R8, R9)
-                    let rdi_arg = get_arg_by_reg(s, "%rdi");
-                    let rsi_arg = get_arg_by_reg(s, "%rsi");
-                    let rdx_arg = get_arg_by_reg(s, "%rdx");
-                    let r10_arg = get_arg_by_reg(s, "%r10");
-                    let r8_arg = get_arg_by_reg(s, "%r8");
-                    let r9_arg = get_arg_by_reg(s, "%r9");
-
-                    let args = [rdi_arg, rsi_arg, rdx_arg, r10_arg, r8_arg, r9_arg];
-                    for arg in args {
+                    let regs = ["%rdi", "%rsi", "%rdx", "%r10", "%r8", "%r9"];
+                    for reg in regs {
+                        let arg = get_arg_by_reg(s, reg);
                         if arg.is_empty() {
                             ui.label(egui::RichText::new("-").weak());
                         } else {

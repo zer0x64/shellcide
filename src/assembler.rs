@@ -101,7 +101,7 @@ pub fn parse_bad_characters(input: &str) -> std::collections::HashSet<u8> {
     let mut bad_chars = std::collections::HashSet::new();
     
     // Split input by whitespace, commas, semicolons, or newlines
-    let tokens = input.split(|c: char| c == ' ' || c == ',' || c == ';' || c == '\n' || c == '\r' || c == '\t');
+    let tokens = input.split(&[' ', ',', ';', '\n', '\r', '\t']);
     
     for token in tokens {
         let token = token.trim();
@@ -142,9 +142,7 @@ fn parse_single_byte(s: &str) -> Option<u8> {
     let lowercase_s = s.to_lowercase();
     
     // Check if it has a prefix
-    let (cleaned, is_explicit_hex) = if lowercase_s.starts_with("\\x") {
-        (&s[2..], true)
-    } else if lowercase_s.starts_with("0x") {
+    let (cleaned, is_explicit_hex) = if lowercase_s.starts_with("\\x") || lowercase_s.starts_with("0x") {
         (&s[2..], true)
     } else {
         (s, false)
@@ -152,7 +150,7 @@ fn parse_single_byte(s: &str) -> Option<u8> {
     
     let has_hex_chars = cleaned.chars().any(|c| {
         let lc = c.to_ascii_lowercase();
-        c.is_ascii_alphabetic() && lc >= 'a' && lc <= 'f'
+        c.is_ascii_alphabetic() && ('a'..='f').contains(&lc)
     });
     let is_hex_pair = cleaned.len() == 2;
     
@@ -164,13 +162,7 @@ fn parse_single_byte(s: &str) -> Option<u8> {
     }
     
     // Fallback: try parsing as decimal, then try as hex if decimal fails
-    if let Ok(b) = cleaned.parse::<u8>() {
-        Some(b)
-    } else if let Ok(b) = u8::from_str_radix(cleaned, 16) {
-        Some(b)
-    } else {
-        None
-    }
+    cleaned.parse::<u8>().ok().or_else(|| u8::from_str_radix(cleaned, 16).ok())
 }
 
 #[cfg(test)]

@@ -300,36 +300,7 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         let syscall_name = &*payload;
         if let Some(s) = crate::syscalls::SYSCALLS.iter().find(|s| s.name == syscall_name) {
             let boilerplate = generate_syscall_boilerplate(s, app.att_syntax);
-            
-            // Insert at the cursor or append
-            let mut state = egui::widgets::text_edit::TextEditState::load(ui.ctx(), text_edit_id).unwrap_or_default();
-            let char_range = state.cursor.char_range();
-            
-            let inserted_len = boilerplate.chars().count();
-            
-            let (byte_idx, char_idx) = if let Some(range) = char_range {
-                let cursor_idx = range.primary.index;
-                let byte_offset = app.code_input.char_indices()
-                    .nth(cursor_idx)
-                    .map(|(i, _)| i)
-                    .unwrap_or(app.code_input.len());
-                (byte_offset, cursor_idx)
-            } else {
-                let total_chars = app.code_input.chars().count();
-                (app.code_input.len(), total_chars)
-            };
-            
-            app.code_input.insert_str(byte_idx, &boilerplate);
-            
-            // Update cursor position to end of inserted boilerplate
-            let new_char_idx = char_idx + inserted_len;
-            let new_range = egui::text::CCursorRange::two(
-                egui::text::CCursor::new(new_char_idx),
-                egui::text::CCursor::new(new_char_idx),
-            );
-            state.cursor.set_char_range(Some(new_range));
-            state.store(ui.ctx(), text_edit_id);
-            
+            app.insert_into_editor(ui.ctx(), &boilerplate);
             app.log(&format!("[Editor] Inserted boilerplate for syscall: {}", syscall_name));
         }
     }

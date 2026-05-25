@@ -20,12 +20,11 @@ fn main() -> Result<(), eframe::Error> {
     println!("[✓] Memory segments mapped successfully (Code, Data, Stack).");
 
     // 2. Setup message passing channels between GUI thread and Debugger thread
-    let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
-    let (event_tx, event_rx) = crossbeam_channel::unbounded();
+    let (cmd_tx, cmd_rx) = flume::unbounded();
+    let (event_tx, event_rx) = flume::unbounded();
     
     // 3. Shared child Process ID for direct memory queries (/proc/pid/mem)
     let shared_pid = Arc::new(Mutex::new(None));
-    let shared_pid_debug = shared_pid.clone();
 
     // 4. Spawn background Debugger worker thread
     println!("[+] Spawning background debugger supervisor thread...");
@@ -46,7 +45,7 @@ fn main() -> Result<(), eframe::Error> {
         "Shellcide",
         options,
         Box::new(move |cc| {
-            Ok(Box::new(app::ShellcideApp::new(cc, cmd_tx, event_rx, shared_pid_debug)))
+            Ok(Box::new(app::ShellcideApp::new(cc, cmd_tx, event_rx, shared_pid)))
         })
     )
 }

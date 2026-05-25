@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::io::FromRawFd;
-use crossbeam_channel::{Receiver, Sender};
+use flume::{Receiver, Sender};
 use std::thread;
 use nix::sys::ptrace;
 use nix::sys::signal::Signal;
@@ -134,11 +134,11 @@ pub fn setup_parent_mappings() -> Result<(), String> {
 /// Reads memory of the child process.
 pub fn read_child_mem(pid: Pid, address: usize, len: usize) -> std::io::Result<Vec<u8>> {
     let mut segment_end = None;
-    if address >= CODE_BASE && address < CODE_BASE + 0x10_0000 {
+    if (CODE_BASE..CODE_BASE + 0x10_0000).contains(&address) {
         segment_end = Some(CODE_BASE + 0x10_0000);
-    } else if address >= DATA_BASE && address < DATA_BASE + 0x10_0000 {
+    } else if (DATA_BASE..DATA_BASE + 0x10_0000).contains(&address) {
         segment_end = Some(DATA_BASE + 0x10_0000);
-    } else if address >= STACK_BASE && address < STACK_BASE + STACK_SIZE {
+    } else if (STACK_BASE..STACK_BASE + STACK_SIZE).contains(&address) {
         segment_end = Some(STACK_BASE + STACK_SIZE);
     }
 
@@ -625,8 +625,8 @@ mod tests {
         // Map parent pages first
         let _ = setup_parent_mappings(); // Might be already mapped, ignore error
 
-        let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
-        let (evt_tx, evt_rx) = crossbeam_channel::unbounded();
+        let (cmd_tx, cmd_rx) = flume::unbounded();
+        let (evt_tx, evt_rx) = flume::unbounded();
 
         // Spawn debugger thread
         let handle = std::thread::spawn(move || {
@@ -689,8 +689,8 @@ mod tests {
     fn test_read_child_mem_boundary() {
         let _ = setup_parent_mappings();
 
-        let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
-        let (evt_tx, evt_rx) = crossbeam_channel::unbounded();
+        let (cmd_tx, cmd_rx) = flume::unbounded();
+        let (evt_tx, evt_rx) = flume::unbounded();
 
         let handle = std::thread::spawn(move || {
             run_debugger_thread(cmd_rx, evt_tx);

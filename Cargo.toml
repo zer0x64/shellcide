@@ -7,15 +7,15 @@ edition = "2021"
 # GUI Toolkit
 eframe = "0.29.0"
 
-# Assembler (Statically compiled from C source)
+# Assembler
 asm-rs = "0.1.1"
 
 # Disassembler
-capstone = "0.14.0"
+iced_x86 = { package = "iced-x86", version = "1.21.0" }
 
 # System APIs
 nix = { version = "0.27.1", features = ["ptrace", "signal", "user", "process", "mman", "fs"] }
 libc = "0.2.153"
 
 # Thread communication
-crossbeam-channel = "0.5.11"
+flume = "0.11.0"

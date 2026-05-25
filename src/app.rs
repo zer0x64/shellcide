@@ -1,6 +1,6 @@
 use std::collections::{HashSet, HashMap};
 use std::sync::{Arc, Mutex};
-use crossbeam_channel::{Receiver, Sender};
+use flume::{Receiver, Sender};
 use eframe::egui;
 use nix::unistd::Pid;
 
@@ -9,8 +9,9 @@ use crate::assembler::assemble;
 use crate::disassembler::{disassemble_code, DisassembledInstruction};
 use crate::ui::struct_packer::{LeftBottomTab, StructPackerState};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TargetArch {
+    #[default]
     X86_64,
     X86,
     Arm,
@@ -19,11 +20,6 @@ pub enum TargetArch {
     Riscv,
 }
 
-impl Default for TargetArch {
-    fn default() -> Self {
-        TargetArch::X86_64
-    }
-}
 
 pub struct ShellcideApp {
     // Code input and settings
@@ -497,8 +493,8 @@ impl eframe::App for ShellcideApp {
 #[cfg(test)]
 impl ShellcideApp {
     pub(crate) fn dummy(bytes: Vec<u8>) -> Self {
-        let (cmd_tx, _) = crossbeam_channel::unbounded();
-        let (_, event_rx) = crossbeam_channel::unbounded();
+        let (cmd_tx, _) = flume::unbounded();
+        let (_, event_rx) = flume::unbounded();
         let shared_pid = Arc::new(Mutex::new(None));
         Self {
             code_input: String::new(),

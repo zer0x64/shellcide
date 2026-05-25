@@ -38,27 +38,18 @@ fn is_number(word: &str) -> bool {
     if word.is_empty() {
         return false;
     }
-    
-    // Check if standard decimal or hex
-    let first = word.chars().next().unwrap();
-    if first.is_ascii_digit() {
+    if word.starts_with(|c: char| c.is_ascii_digit()) {
         return true;
     }
-    
-    // Check if negative number
-    if first == '-' && word.len() > 1 && word.chars().nth(1).unwrap().is_ascii_digit() {
+    if word.starts_with('-') && word.len() > 1 && word[1..].starts_with(|c: char| c.is_ascii_digit()) {
         return true;
     }
-    
-    // Check hex constants (like 0xABC or A0h)
     if word.starts_with("0x") || word.starts_with("0b") {
         return true;
     }
-    
-    if word.ends_with('h') && word.len() > 1 && word.chars().next().unwrap().is_ascii_alphanumeric() {
+    if word.ends_with('h') && word.len() > 1 && word.starts_with(|c: char| c.is_ascii_alphanumeric()) {
         return true;
     }
-
     false
 }
 

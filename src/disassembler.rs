@@ -1,4 +1,4 @@
-use capstone::prelude::*;
+use iced_x86::{Decoder, DecoderOptions, Formatter, IntelFormatter, GasFormatter};
 use crate::app::TargetArch;
 
 #[derive(Debug, Clone)]
@@ -20,64 +20,43 @@ pub fn disassemble_code(code: &[u8], base_address: u64, att_syntax: bool, arch: 
         return Vec::new();
     }
 
-    let cs = match arch {
-        TargetArch::X86_64 => {
-            let mut builder = Capstone::new()
-                .x86()
-                .mode(arch::x86::ArchMode::Mode64);
-            if att_syntax {
-                builder = builder.syntax(arch::x86::ArchSyntax::Att);
-            } else {
-                builder = builder.syntax(arch::x86::ArchSyntax::Intel);
-            }
-            builder.build()
-        }
-        TargetArch::X86 => {
-            let mut builder = Capstone::new()
-                .x86()
-                .mode(arch::x86::ArchMode::Mode32);
-            if att_syntax {
-                builder = builder.syntax(arch::x86::ArchSyntax::Att);
-            } else {
-                builder = builder.syntax(arch::x86::ArchSyntax::Intel);
-            }
-            builder.build()
-        }
-        TargetArch::Arm => Capstone::new()
-            .arm()
-            .mode(arch::arm::ArchMode::Arm)
-            .build(),
-        TargetArch::Thumb => Capstone::new()
-            .arm()
-            .mode(arch::arm::ArchMode::Thumb)
-            .build(),
-        TargetArch::Aarch64 => Capstone::new()
-            .arm64()
-            .mode(arch::arm64::ArchMode::Arm)
-            .build(),
-        TargetArch::Riscv => Capstone::new()
-            .riscv()
-            .mode(arch::riscv::ArchMode::RiscV64)
-            .build(),
+    let bitness = match arch {
+        TargetArch::X86_64 => 64,
+        TargetArch::X86 => 32,
+        _ => return Vec::new(),
     };
 
-    let cs = match cs {
-        Ok(cs) => cs,
-        Err(_) => return Vec::new(),
-    };
-
-    let insns = match cs.disasm_all(code, base_address) {
-        Ok(insns) => insns,
-        Err(_) => return Vec::new(),
+    let mut decoder = Decoder::with_ip(bitness, code, base_address, DecoderOptions::NONE);
+    
+    let mut formatter: Box<dyn Formatter> = if att_syntax {
+        let mut f = GasFormatter::new();
+        f.options_mut().set_space_after_operand_separator(true);
+        f.options_mut().set_gas_show_mnemonic_size_suffix(true);
+        Box::new(f)
+    } else {
+        let mut f = IntelFormatter::new();
+        f.options_mut().set_space_after_operand_separator(true);
+        Box::new(f)
     };
 
     let mut instructions = Vec::new();
-    for insn in insns.as_ref() {
-        let mnemonic = insn.mnemonic().unwrap_or("").to_string();
-        let op_str = insn.op_str().unwrap_or("").to_string();
+    let mut offset = 0;
+
+    for instruction in &mut decoder {
+        let instr_len = instruction.len();
+        let end = (offset + instr_len).min(code.len());
+        let bytes = code[offset..end].to_vec();
+        offset = end;
+
+        let mut mnemonic = String::new();
+        formatter.format_mnemonic(&instruction, &mut mnemonic);
+
+        let mut op_str = String::new();
+        formatter.format_all_operands(&instruction, &mut op_str);
+
         instructions.push(DisassembledInstruction {
-            address: insn.address(),
-            bytes: insn.bytes().to_vec(),
+            address: instruction.ip(),
+            bytes,
             mnemonic,
             op_str,
         });
@@ -108,4 +87,3 @@ mod tests {
         assert_eq!(insts[0].op_str, "$1, %rax");
     }
 }
-

@@ -42,7 +42,7 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
     // Register Grid
     egui::ScrollArea::both().id_salt("regs_scroll").max_height(250.0).show(ui, |ui| {
-        let reg_list = vec![
+        let reg_list = [
             ("rax", app.regs.rax), ("rbx", app.regs.rbx),
             ("rcx", app.regs.rcx), ("rdx", app.regs.rdx),
             ("rsi", app.regs.rsi), ("rdi", app.regs.rdi),
@@ -57,7 +57,7 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         egui::Grid::new("registers_grid").striped(true).num_columns(4).show(ui, |ui| {
             let mut idx = 0;
             let ctx = ui.ctx().clone();
-            for (name, val) in reg_list.clone() {
+            for &(name, val) in &reg_list {
                 let name_str = name.to_string();
                 
                 let animation_factor = if let Some(last_changed) = app.reg_change_times.get(name) {
