@@ -134,12 +134,14 @@ pub enum DebuggerEvent {
     Started {
         pid: Pid,
         regs: CpuRegisters,
+        pc_breakpoints: std::collections::HashMap<usize, u8>,
     },
     Stopped {
         regs: CpuRegisters,
         signal: Signal,
         trap_addr: Option<usize>, // Address of breakpoint if hit
         status_message: String,
+        pc_breakpoints: std::collections::HashMap<usize, u8>,
     },
     Terminated {
         exit_code: i32,
@@ -475,7 +477,11 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                                     continue;
                                 }
 
-                                let _ = tx.send(DebuggerEvent::Started { pid: child, regs });
+                                let _ = tx.send(DebuggerEvent::Started {
+                                    pid: child,
+                                    regs,
+                                    pc_breakpoints: breakpoints.clone(),
+                                });
 
                                 // Resume child execution immediately so there is no automatic breakpoint on the first instruction!
                                 if let Err(e) = ptrace::cont(child, None) {
@@ -495,6 +501,7 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                                     &mut last_breakpoint_addr,
                                     user_code_len,
                                     &rx,
+                                    false,
                                 );
                             }
                             other => {
@@ -533,9 +540,12 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                             &mut last_breakpoint_addr,
                             user_code_len,
                             &rx,
+                            true,
                         );
-                        // Re-write breakpoint INT3 byte
-                        let _ = write_child_mem(pid, bp_addr, &[0xCC]);
+                        // Re-write breakpoint INT3 byte if it's still active
+                        if breakpoints.contains_key(&bp_addr) {
+                            let _ = write_child_mem(pid, bp_addr, &[0xCC]);
+                        }
 
                         if wait_res == WaitResult::StoppedSignal {
                             last_breakpoint_addr = None;
@@ -555,6 +565,7 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                         &mut last_breakpoint_addr,
                         user_code_len,
                         &rx,
+                        true,
                     );
                     if wait_res == WaitResult::StoppedSignal {
                         last_breakpoint_addr = None;
@@ -582,9 +593,12 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                             &mut last_breakpoint_addr,
                             user_code_len,
                             &rx,
+                            true,
                         );
-                        // Put INT3 back
-                        let _ = write_child_mem(pid, bp_addr, &[0xCC]);
+                        // Put INT3 back if it's still active
+                        if breakpoints.contains_key(&bp_addr) {
+                            let _ = write_child_mem(pid, bp_addr, &[0xCC]);
+                        }
 
                         match wait_res {
                             WaitResult::StoppedSignal => {
@@ -612,6 +626,7 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                             &mut last_breakpoint_addr,
                             user_code_len,
                             &rx,
+                            false,
                         );
                     }
                 }
@@ -681,6 +696,7 @@ fn wait_and_handle(
     last_breakpoint_addr: &mut Option<usize>,
     user_code_len: usize,
     rx: &Receiver<DebuggerCommand>,
+    is_single_step: bool,
 ) -> WaitResult {
     loop {
         // Check for incoming control commands while waiting
@@ -747,8 +763,9 @@ fn wait_and_handle(
                         return WaitResult::Exited;
                     }
 
-                    // Case 2: Hit a user-defined breakpoint
-                    if breakpoints.contains_key(&possible_bp) {
+                    // Case 2: Hit a user-defined breakpoint.
+                    // Only check if this was NOT a single-step completion trap.
+                    if !is_single_step && breakpoints.contains_key(&possible_bp) {
                         regs.rip = possible_bp as u64;
                         let _ = set_child_regs(pid, regs);
 
@@ -773,6 +790,7 @@ fn wait_and_handle(
                     signal: sig,
                     trap_addr,
                     status_message,
+                    pc_breakpoints: breakpoints.clone(),
                 });
 
                 if is_bp {
@@ -931,4 +949,162 @@ mod tests {
         drop(cmd_tx);
         let _ = handle.join();
     }
+
+    #[test]
+    fn test_debugger_jmp_breakpoint() {
+        let _ = setup_parent_mappings();
+
+        let (cmd_tx, cmd_rx) = flume::unbounded();
+        let (evt_tx, evt_rx) = flume::unbounded();
+
+        let handle = std::thread::spawn(move || {
+            run_debugger_thread(cmd_rx, evt_tx);
+        });
+
+        // EB 01                -> jmp $+3 (target is mov rax, 42)
+        // 90                   -> nop (1 byte)
+        // 48 C7 C0 2A 00 00 00 -> mov rax, 42 (7 bytes)
+        let code = vec![0xEB, 0x01, 0x90, 0x48, 0xC7, 0xC0, 0x2A, 0x00, 0x00, 0x00];
+
+        cmd_tx
+            .send(DebuggerCommand::Start {
+                code,
+                initial_regs: CpuRegisters::default(),
+                memory_patches: vec![],
+                breakpoints: vec![CODE_BASE],
+            })
+            .unwrap();
+
+        // Expect Started event
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Started { regs, .. } => {
+                assert_eq!(regs.rip, CODE_BASE as u64);
+            }
+            other => panic!("Expected Started event, got {:?}", other),
+        }
+
+        // Expect Stopped event due to the breakpoint on the jmp instruction
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { regs, signal, .. } => {
+                assert_eq!(signal, Signal::SIGTRAP);
+                assert_eq!(regs.rip, CODE_BASE as u64);
+            }
+            other => panic!("Expected Stopped event, got {:?}", other),
+        }
+
+        // Step once: should step over the breakpointed jmp to CODE_BASE + 3
+        cmd_tx.send(DebuggerCommand::Step).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { regs, signal, .. } => {
+                assert_eq!(signal, Signal::SIGTRAP);
+                assert_eq!(regs.rip, (CODE_BASE + 3) as u64);
+            }
+            other => panic!("Expected Stopped (SIGTRAP) at CODE_BASE+3, got {:?}", other),
+        }
+
+        // Step again: should execute mov rax, 42
+        cmd_tx.send(DebuggerCommand::Step).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { regs, signal, .. } => {
+                assert_eq!(signal, Signal::SIGTRAP);
+                assert_eq!(regs.rax, 42);
+            }
+            other => panic!("Expected Stopped (SIGTRAP) after mov rax, 42, got {:?}", other),
+        }
+
+        // Terminate
+        cmd_tx.send(DebuggerCommand::Terminate).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Terminated { .. } => {}
+            other => panic!("Expected Terminated event, got {:?}", other),
+        }
+
+        drop(cmd_tx);
+        let _ = handle.join();
+    }
+
+    #[test]
+    fn test_debugger_nop_breakpoint() {
+        let _ = setup_parent_mappings();
+
+        let (cmd_tx, cmd_rx) = flume::unbounded();
+        let (evt_tx, evt_rx) = flume::unbounded();
+
+        let handle = std::thread::spawn(move || {
+            run_debugger_thread(cmd_rx, evt_tx);
+        });
+
+        // 90                   -> nop (1 byte)
+        // 90                   -> nop (1 byte)
+        // 48 C7 C0 2A 00 00 00 -> mov rax, 42 (7 bytes)
+        let code = vec![0x90, 0x90, 0x48, 0xC7, 0xC0, 0x2A, 0x00, 0x00, 0x00];
+
+        cmd_tx
+            .send(DebuggerCommand::Start {
+                code,
+                initial_regs: CpuRegisters::default(),
+                memory_patches: vec![],
+                breakpoints: vec![CODE_BASE],
+            })
+            .unwrap();
+
+        // Expect Started event
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Started { regs, .. } => {
+                assert_eq!(regs.rip, CODE_BASE as u64);
+            }
+            other => panic!("Expected Started event, got {:?}", other),
+        }
+
+        // Expect Stopped event due to the breakpoint on the first nop instruction
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { regs, signal, .. } => {
+                assert_eq!(signal, Signal::SIGTRAP);
+                assert_eq!(regs.rip, CODE_BASE as u64);
+            }
+            other => panic!("Expected Stopped event, got {:?}", other),
+        }
+
+        // Step once: should step over the breakpointed first nop to CODE_BASE + 1
+        cmd_tx.send(DebuggerCommand::Step).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { regs, signal, .. } => {
+                assert_eq!(signal, Signal::SIGTRAP);
+                assert_eq!(regs.rip, (CODE_BASE + 1) as u64);
+            }
+            other => panic!("Expected Stopped (SIGTRAP) at CODE_BASE+1, got {:?}", other),
+        }
+
+        // Step again: should step over the second nop to CODE_BASE + 2
+        cmd_tx.send(DebuggerCommand::Step).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { regs, signal, .. } => {
+                assert_eq!(signal, Signal::SIGTRAP);
+                assert_eq!(regs.rip, (CODE_BASE + 2) as u64);
+            }
+            other => panic!("Expected Stopped (SIGTRAP) at CODE_BASE+2, got {:?}", other),
+        }
+
+        // Step again: should execute mov rax, 42
+        cmd_tx.send(DebuggerCommand::Step).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Stopped { regs, signal, .. } => {
+                assert_eq!(signal, Signal::SIGTRAP);
+                assert_eq!(regs.rax, 42);
+            }
+            other => panic!("Expected Stopped (SIGTRAP) after mov rax, 42, got {:?}", other),
+        }
+
+        // Terminate
+        cmd_tx.send(DebuggerCommand::Terminate).unwrap();
+        match evt_rx.recv().unwrap() {
+            DebuggerEvent::Terminated { .. } => {}
+            other => panic!("Expected Terminated event, got {:?}", other),
+        }
+
+        drop(cmd_tx);
+        let _ = handle.join();
+    }
 }
+
+

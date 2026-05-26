@@ -5,17 +5,7 @@ use crate::ui::theme::{
 };
 use eframe::egui::{self, Color32};
 
-fn highlight_if(mut text: egui::RichText, cond: bool) -> egui::RichText {
-    if cond {
-        text = text.background_color(Color32::from_rgba_unmultiplied(
-            CYBER_CYAN.r(),
-            CYBER_CYAN.g(),
-            CYBER_CYAN.b(),
-            30,
-        ));
-    }
-    text
-}
+
 
 fn dbg_button(ui: &mut egui::Ui, enabled: bool, text: &str, fill: Color32) -> egui::Response {
     ui.add_enabled(
@@ -107,6 +97,64 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             }
         }
     });
+ 
+    ui.separator();
+
+    ui.collapsing("🔒 Compression, Encryption & Encoding Pipeline", |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Compression:");
+            egui::ComboBox::from_id_salt("compression_combo")
+                .selected_text(app.compression_type.display_name())
+                .show_ui(ui, |ui| {
+                    for ct in &crate::encoder::CompressionType::ALL {
+                        ui.selectable_value(&mut app.compression_type, *ct, ct.display_name());
+                    }
+                });
+
+            if app.compression_type != crate::encoder::CompressionType::None {
+                if let Some(marker) = app.resolved_compression_marker {
+                    ui.colored_label(TOXIC_GREEN, format!("Resolved Marker: 0x{:02X}", marker));
+                } else {
+                    ui.colored_label(MUSTARD_YELLOW, "Resolved Marker: None");
+                }
+            }
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Encryption:");
+            egui::ComboBox::from_id_salt("encryption_combo")
+                .selected_text(app.encryption_type.display_name())
+                .show_ui(ui, |ui| {
+                    for et in &crate::encoder::EncryptionType::ALL {
+                        ui.selectable_value(&mut app.encryption_type, *et, et.display_name());
+                    }
+                });
+
+            if app.encryption_type != crate::encoder::EncryptionType::None {
+                ui.label("Key:");
+                ui.text_edit_singleline(&mut app.encryption_key);
+            }
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Encoding:");
+            egui::ComboBox::from_id_salt("encoding_combo")
+                .selected_text(app.encoding_type.display_name())
+                .show_ui(ui, |ui| {
+                    for et in &crate::encoder::EncodingType::ALL {
+                        ui.selectable_value(&mut app.encoding_type, *et, et.display_name());
+                    }
+                });
+
+            if app.encoding_type != crate::encoder::EncodingType::None {
+                if let Some(key) = app.resolved_encoding_key {
+                    ui.colored_label(TOXIC_GREEN, format!("Resolved Key: 0x{:02X}", key));
+                } else {
+                    ui.colored_label(MUSTARD_YELLOW, "Resolved Key: None");
+                }
+            }
+        });
+    });
 
     ui.separator();
     ui.horizontal(|ui| {
@@ -145,43 +193,39 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             let is_current = app.is_running && app.regs.rip == inst.address;
                             let has_bp = app.breakpoints.contains(&addr);
 
+                            // Closure for formatting rich text in the current row context
+                            let fmt_text = |val: &str, color: Color32, strong: bool| {
+                                let mut r = egui::RichText::new(val).monospace().color(color);
+                                if strong {
+                                    r = r.strong();
+                                }
+                                if is_current {
+                                    r = r.background_color(Color32::from_rgba_unmultiplied(
+                                        CYBER_CYAN.r(),
+                                        CYBER_CYAN.g(),
+                                        CYBER_CYAN.b(),
+                                        30,
+                                    ));
+                                }
+                                r
+                            };
+
                             if is_native {
                                 // 1. Breakpoint margin toggle button
                                 let bp_text = if has_bp { "🔴" } else { "  " };
-                                let bp_rich = highlight_if(
-                                    egui::RichText::new(bp_text).monospace(),
-                                    is_current,
-                                );
-                                let bp_btn = ui.add(egui::Button::new(bp_rich).frame(false));
+                                let bp_btn = ui.add(egui::Button::new(fmt_text(bp_text, Color32::WHITE, false)).frame(false));
                                 if bp_btn.clicked() {
                                     clicked_bp = Some((addr, has_bp));
                                 }
 
                                 // 2. Active RIP indicator arrow
                                 let rip_indicator = if is_current { "👉" } else { "  " };
-                                let rip_rich = highlight_if(
-                                    egui::RichText::new(rip_indicator)
-                                        .monospace()
-                                        .strong()
-                                        .color(CYBER_CYAN),
-                                    is_current,
-                                );
-                                ui.label(rip_rich);
+                                ui.label(fmt_text(rip_indicator, CYBER_CYAN, true));
                             }
 
                             // 3. Instruction address
-                            let addr_color = if is_current {
-                                CYBER_CYAN
-                            } else {
-                                Color32::GRAY
-                            };
-                            let addr_rich = highlight_if(
-                                egui::RichText::new(format!("0x{:08X}:", addr))
-                                    .monospace()
-                                    .color(addr_color),
-                                is_current,
-                             );
-                            ui.label(addr_rich);
+                            let addr_color = if is_current { CYBER_CYAN } else { Color32::GRAY };
+                            ui.label(fmt_text(&format!("0x{:08X}:", addr), addr_color, false));
 
                             // 4. Hex machine bytes
                             ui.horizontal(|ui| {
@@ -195,57 +239,20 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                     } else {
                                         SLATE_GRAY
                                     };
-                                    let mut text = egui::RichText::new(format!("{:02X}", b))
-                                        .monospace()
-                                        .color(b_color);
-                                    if is_bad {
-                                        text = text.strong();
-                                    }
-                                    let text = highlight_if(text, is_current);
-                                    ui.label(text);
+                                    ui.label(fmt_text(&format!("{:02X}", b), b_color, is_bad));
                                 }
                             });
 
                             // 5. Mnemonic & Opcode operands
-                            let text_color = if is_current {
-                                CYBER_CYAN
-                            } else {
-                                Color32::WHITE
-                            };
-                            let mnem_rich = highlight_if(
-                                egui::RichText::new(&inst.mnemonic)
-                                    .monospace()
-                                    .strong()
-                                    .color(text_color),
-                                is_current,
-                            );
-                            ui.label(mnem_rich);
-
-                            let op_rich = highlight_if(
-                                egui::RichText::new(&inst.op_str)
-                                    .monospace()
-                                    .color(text_color),
-                                is_current,
-                            );
-                            ui.label(op_rich);
+                            let text_color = if is_current { CYBER_CYAN } else { Color32::WHITE };
+                            ui.label(fmt_text(&inst.mnemonic, text_color, true));
+                            ui.label(fmt_text(&inst.op_str, text_color, false));
                             ui.end_row();
                         }
                     });
 
-                if let Some((addr, has_bp)) = clicked_bp {
-                    if has_bp {
-                        app.breakpoints.remove(&addr);
-                        app.cmd_tx
-                            .send(DebuggerCommand::ToggleBreakpoint(addr, false))
-                            .unwrap();
-                        app.log(&format!("[Breakpoint] Removed at 0x{:08X}", addr));
-                    } else {
-                        app.breakpoints.insert(addr);
-                        app.cmd_tx
-                            .send(DebuggerCommand::ToggleBreakpoint(addr, true))
-                            .unwrap();
-                        app.log(&format!("[Breakpoint] Added at 0x{:08X}", addr));
-                    }
+                if let Some((addr, _has_bp)) = clicked_bp {
+                    app.toggle_breakpoint(addr);
                     app.sync_code_from_breakpoints();
                 }
             }
@@ -276,10 +283,10 @@ pub fn render_console_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     );
                 } else {
                     let formats = [
-                        ("Raw Hex String", app.format_raw_hex()),
-                        ("Python Variable", app.format_python()),
-                        ("C Variable", app.format_c()),
-                        ("Rust Variable", app.format_rust()),
+                        ("Raw Hex String", app.format_raw_hex(&app.compiled_bytes)),
+                        ("Python Variable", app.format_python(&app.compiled_bytes)),
+                        ("C Variable", app.format_c(&app.compiled_bytes)),
+                        ("Rust Variable", app.format_rust(&app.compiled_bytes)),
                     ];
 
                     for (label, val) in formats {

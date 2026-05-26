@@ -3,6 +3,10 @@ use crate::debugger::DebuggerCommand;
 use crate::ui::theme::{CYBER_CYAN, NEON_PINK, LAUGHTER_PURPLE, SLATE_GRAY, ICE_BLUE};
 use eframe::egui::{self, Color32};
 
+fn with_alpha(color: Color32, alpha: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
+}
+
 fn highlight_stack_cell(
     mut label: egui::RichText,
     byte_addr: usize,
@@ -12,11 +16,11 @@ fn highlight_stack_cell(
         let rsp = app.regs.rsp as usize;
         let rbp = app.regs.rbp as usize;
         if byte_addr == rsp {
-            label = label.background_color(Color32::from_rgba_unmultiplied(NEON_PINK.r(), NEON_PINK.g(), NEON_PINK.b(), 120));
+            label = label.background_color(with_alpha(NEON_PINK, 120));
         } else if byte_addr == rbp {
-            label = label.background_color(Color32::from_rgba_unmultiplied(LAUGHTER_PURPLE.r(), LAUGHTER_PURPLE.g(), LAUGHTER_PURPLE.b(), 120));
+            label = label.background_color(with_alpha(LAUGHTER_PURPLE, 120));
         } else if (rsp + 1..rbp).contains(&byte_addr) {
-            label = label.background_color(Color32::from_rgba_unmultiplied(NEON_PINK.r(), NEON_PINK.g(), NEON_PINK.b(), 30));
+            label = label.background_color(with_alpha(NEON_PINK, 30));
         }
     }
     label
@@ -77,12 +81,11 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     let rbp = app.regs.rbp as usize;
                     let has_rsp = (row_addr..row_addr + 16).contains(&rsp);
                     let has_rbp = (row_addr..row_addr + 16).contains(&rbp);
-                    if has_rsp && has_rbp {
-                        suffix.push_str(" [RSP,RBP]");
-                    } else if has_rsp {
-                        suffix.push_str(" [RSP]");
-                    } else if has_rbp {
-                        suffix.push_str(" [RBP]");
+                    match (has_rsp, has_rbp) {
+                        (true, true) => suffix.push_str(" [RSP,RBP]"),
+                        (true, false) => suffix.push_str(" [RSP]"),
+                        (false, true) => suffix.push_str(" [RBP]"),
+                        _ => {}
                     }
                 }
 
@@ -110,6 +113,9 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                 if app.is_running && app.is_stopped {
                                     app.cmd_tx.send(DebuggerCommand::WriteMemory(byte_addr, vec![v])).unwrap();
                                     app.log(&format!("[Debugger] Wrote byte 0x{:02X} to memory address 0x{:X}", v, byte_addr));
+                                    if (crate::debugger::CODE_BASE..crate::debugger::CODE_BASE + app.compiled_bytes.len()).contains(&byte_addr) {
+                                        app.refresh_disassembly_from_running_process();
+                                    }
                                 }
                             }
                             app.editing_memory_byte = None;
@@ -137,12 +143,8 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         let idx = row_offset + c;
                         let b = app.memory_data.get(idx).copied().unwrap_or(0);
                         let byte_addr = row_addr + c;
-                        let char_str = if (32..=126).contains(&b) {
-                            (b as char).to_string()
-                        } else {
-                            ".".to_string()
-                        };
-                        let label = egui::RichText::new(char_str).monospace().color(ICE_BLUE);
+                        let char_val = if (32..=126).contains(&b) { b as char } else { '.' };
+                        let label = egui::RichText::new(char_val.to_string()).monospace().color(ICE_BLUE);
                         let label = highlight_stack_cell(label, byte_addr, app);
                         ui.label(label);
                     }

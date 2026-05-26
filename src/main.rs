@@ -4,6 +4,7 @@ mod assembler;
 mod debugger;
 mod disassembler;
 mod editor;
+mod encoder;
 mod syscalls;
 mod ui;
 

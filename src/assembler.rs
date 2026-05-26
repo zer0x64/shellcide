@@ -235,6 +235,13 @@ mod tests {
     }
 
     #[test]
+    fn test_assembler_labels() {
+        let code = "jmp label\nlabel:\nnop";
+        let res = assemble(code, 0x10000000, false, TargetArch::X86_64);
+        println!("label result: {:?}", res);
+    }
+
+    #[test]
     fn test_demo_code_compilation() {
         let res = assemble(DEMO_CODE, 0x10000000, false, TargetArch::X86_64);
         assert!(res.is_ok(), "Compilation failed: {:?}", res.err());

@@ -1,5 +1,4 @@
 use crate::app::ShellcideApp;
-use crate::debugger::DebuggerCommand;
 use crate::ui::theme::{BRIGHT_RED, CYBER_CYAN, SLATE_GRAY};
 use eframe::egui::{self, Color32};
 
@@ -264,23 +263,10 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                     app.editor_breakpoints.insert(i);
                                 }
 
-                                let action = if was_present { "Removed" } else { "Added" };
                                 if let Some(addr) = resolved_addr {
-                                    if was_present {
-                                        app.breakpoints.remove(&addr);
-                                    } else {
-                                        app.breakpoints.insert(addr);
-                                    }
-                                    app.cmd_tx
-                                        .send(DebuggerCommand::ToggleBreakpoint(addr, !was_present))
-                                        .ok();
-                                    app.log(&format!(
-                                        "[Breakpoint] {} at line {}, 0x{:08X}",
-                                        action,
-                                        i + 1,
-                                        addr
-                                    ));
+                                    app.toggle_breakpoint(addr);
                                 } else {
+                                    let action = if was_present { "Removed" } else { "Added" };
                                     app.log(&format!("[Breakpoint] {} at line {}", action, i + 1));
                                 }
                             }
