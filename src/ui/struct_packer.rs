@@ -392,16 +392,11 @@ fn format_assembly_block(
     description: &str,
 ) -> String {
     let mut out = String::new();
-    if att_syntax {
-        out.push_str(&format!("/* {} */\n", description));
-        for &(_intel_dir, att_dir, comment) in lines {
-            out.push_str(&format!("{:<30} /* {} */\n", att_dir, comment));
-        }
-    } else {
-        out.push_str(&format!("; {}\n", description));
-        for &(intel_dir, _att_dir, comment) in lines {
-            out.push_str(&format!("{:<30} ; {}\n", intel_dir, comment));
-        }
+    let (comment_start, comment_end) = if att_syntax { ("/* ", " */") } else { ("; ", "") };
+    out.push_str(&format!("{}{}{}\n", comment_start, description, comment_end));
+    for &(intel_dir, att_dir, comment) in lines {
+        let dir = if att_syntax { att_dir } else { intel_dir };
+        out.push_str(&format!("{:<30} {}{}{}\n", dir, comment_start, comment, comment_end));
     }
     out
 }
@@ -642,40 +637,26 @@ fn format_stack_push_assembly(bytes: &[u8], att_syntax: bool) -> String {
     }
 
     let mut out = String::new();
-    if att_syntax {
-        out.push_str("/* Stack push sequence (reverse order) */\n");
-        for (i, &val) in chunks.iter().enumerate().rev() {
-            let start_byte = i * 8;
-            let end_byte = (i * 8 + 7).min(bytes.len() - 1);
-            if val <= 0x7FFFFFFF {
-                out.push_str(&format!(
-                    "pushq $0x{:08X}   /* bytes {}..{} */\n",
-                    val, start_byte, end_byte
-                ));
+    let (comment_start, comment_end) = if att_syntax { ("/* ", " */") } else { ("; ", "") };
+    out.push_str(&format!("{}Stack push sequence (reverse order){}\n", comment_start, comment_end));
+
+    for (i, &val) in chunks.iter().enumerate().rev() {
+        let start_byte = i * 8;
+        let end_byte = (i * 8 + 7).min(bytes.len() - 1);
+        let byte_comment = format!("bytes {}..{}", start_byte, end_byte);
+        let comment = format!("{}{}{}", comment_start, byte_comment, comment_end);
+
+        if val <= 0x7FFFFFFF {
+            if att_syntax {
+                out.push_str(&format!("pushq $0x{:08X}   {}\n", val, comment));
             } else {
-                out.push_str(&format!("movabs $0x{:016X}, %rax\n", val));
-                out.push_str(&format!(
-                    "pushq %rax         /* bytes {}..{} */\n",
-                    start_byte, end_byte
-                ));
+                out.push_str(&format!("push 0x{:08X}      {}\n", val, comment));
             }
-        }
-    } else {
-        out.push_str("; Stack push sequence (reverse order)\n");
-        for (i, &val) in chunks.iter().enumerate().rev() {
-            let start_byte = i * 8;
-            let end_byte = (i * 8 + 7).min(bytes.len() - 1);
-            if val <= 0x7FFFFFFF {
-                out.push_str(&format!(
-                    "push 0x{:08X}      ; bytes {}..{}\n",
-                    val, start_byte, end_byte
-                ));
+        } else {
+            if att_syntax {
+                out.push_str(&format!("movabs $0x{:016X}, %rax\npushq %rax         {}\n", val, comment));
             } else {
-                out.push_str(&format!("mov rax, 0x{:016X}\n", val));
-                out.push_str(&format!(
-                    "push rax           ; bytes {}..{}\n",
-                    start_byte, end_byte
-                ));
+                out.push_str(&format!("mov rax, 0x{:016X}\npush rax           {}\n", val, comment));
             }
         }
     }

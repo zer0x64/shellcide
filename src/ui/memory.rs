@@ -56,7 +56,7 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     ui.separator();
 
     // Hex Memory Grid
-    egui::ScrollArea::both().id_salt("mem_scroll").show(ui, |ui| {
+    egui::ScrollArea::both().auto_shrink([false, false]).id_salt("mem_scroll").show(ui, |ui| {
         egui::Grid::new("mem_grid").spacing([4.0, 4.0]).show(ui, |ui| {
             // Header row
             ui.label(egui::RichText::new("Offset").strong().monospace());

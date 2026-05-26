@@ -11,16 +11,10 @@ pub(crate) fn extract_arg_name(arg_type: &str) -> &str {
         return "";
     }
     let last = parts[parts.len() - 1];
-    let mut name = last;
-    while name.starts_with('*') {
-        name = &name[1..];
-    }
+    let name = last.trim_start_matches('*');
     if name.is_empty() {
         for part in parts.iter().rev().skip(1) {
-            let mut p = *part;
-            while p.starts_with('*') {
-                p = &p[1..];
-            }
+            let p = part.trim_start_matches('*');
             if !p.is_empty() && p != "const" && p != "struct" {
                 return p;
             }

@@ -4,10 +4,8 @@ use crate::ui::theme::{CYBER_CYAN, SOFT_ORANGE};
 use eframe::egui::{self, Color32};
 
 fn lerp_color(from: Color32, to: Color32, t: f32) -> Color32 {
-    let r = (from.r() as f32 + (to.r() as f32 - from.r() as f32) * t).round() as u8;
-    let g = (from.g() as f32 + (to.g() as f32 - from.g() as f32) * t).round() as u8;
-    let b = (from.b() as f32 + (to.b() as f32 - from.b() as f32) * t).round() as u8;
-    Color32::from_rgb(r, g, b)
+    let lerp = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+    Color32::from_rgb(lerp(from.r(), to.r()), lerp(from.g(), to.g()), lerp(from.b(), to.b()))
 }
 
 pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
@@ -16,38 +14,22 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
     // RFlags flags breakdown
     ui.horizontal(|ui| {
-        let rflags = app.regs.rflags;
-        let cf = (rflags & 0x0001) != 0;
-        let pf = (rflags & 0x0004) != 0;
-        let af = (rflags & 0x0010) != 0;
-        let zf = (rflags & 0x0040) != 0;
-        let sf = (rflags & 0x0080) != 0;
-        let tf = (rflags & 0x0100) != 0;
-        let if_ = (rflags & 0x0200) != 0;
-        let df = (rflags & 0x0400) != 0;
-        let of = (rflags & 0x0800) != 0;
-
         ui.label("RFLAGS Bits:");
+        let rflags = app.regs.rflags;
         let flags = [
-            ("ZF", zf),
-            ("CF", cf),
-            ("SF", sf),
-            ("OF", of),
-            ("PF", pf),
-            ("AF", af),
-            ("TF", tf),
-            ("IF", if_),
-            ("DF", df),
+            ("ZF", (rflags & 0x0040) != 0),
+            ("CF", (rflags & 0x0001) != 0),
+            ("SF", (rflags & 0x0080) != 0),
+            ("OF", (rflags & 0x0800) != 0),
+            ("PF", (rflags & 0x0004) != 0),
+            ("AF", (rflags & 0x0010) != 0),
+            ("TF", (rflags & 0x0100) != 0),
+            ("IF", (rflags & 0x0200) != 0),
+            ("DF", (rflags & 0x0400) != 0),
         ];
         for (name, val) in flags {
-            ui.colored_label(
-                if val {
-                    CYBER_CYAN
-                } else {
-                    Color32::GRAY
-                },
-                name,
-            );
+            let color = if val { CYBER_CYAN } else { Color32::GRAY };
+            ui.colored_label(color, name);
         }
     });
 
@@ -55,8 +37,8 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
     // Register Grid
     egui::ScrollArea::both()
+        .auto_shrink([false, false])
         .id_salt("regs_scroll")
-        .max_height(250.0)
         .show(ui, |ui| {
             let reg_list = [
                 ("rax", app.regs.rax),
@@ -83,24 +65,20 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 .striped(true)
                 .num_columns(4)
                 .show(ui, |ui| {
-                    let mut idx = 0;
                     let ctx = ui.ctx().clone();
-                    for &(name, val) in &reg_list {
+                    for (idx, &(name, val)) in reg_list.iter().enumerate() {
                         let name_str = name.to_string();
 
-                        let animation_factor =
-                            if let Some(last_changed) = app.reg_change_times.get(name) {
-                                let elapsed = last_changed.elapsed().as_secs_f32();
-                                let duration = 0.8; // 800ms fade duration
-                                if elapsed < duration {
-                                    ui.ctx().request_repaint();
-                                    1.0 - (elapsed / duration)
-                                } else {
-                                    0.0
-                                }
+                        let animation_factor = app.reg_change_times.get(name).map_or(0.0, |last_changed| {
+                            let elapsed = last_changed.elapsed().as_secs_f32();
+                            let duration = 0.8; // 800ms fade duration
+                            if elapsed < duration {
+                                ui.ctx().request_repaint();
+                                1.0 - (elapsed / duration)
                             } else {
                                 0.0
-                            };
+                            }
+                        });
 
                         let name_color = lerp_color(
                             CYBER_CYAN,
@@ -158,8 +136,7 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             }
                         }
 
-                        idx += 1;
-                        if idx % 2 == 0 {
+                        if idx % 2 == 1 {
                             ui.end_row();
                         } else {
                             ui.separator();

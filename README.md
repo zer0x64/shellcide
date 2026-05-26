@@ -10,7 +10,7 @@ This is very much a WIP, but in my opinion it's already better to use compared t
 - [x] Linux support
 - [x] x86_64 assembler
 - [x] Native arch debugger (x86_64)
-- [x] Cross-architecture assembler (x86, x86_64, ARM, ARM-Thumb, AArch64, RiscV)
+- [x] Cross-architecture assembler (x86, x86_64, ARM, ARM-Thumb, AArch64, RiscV) (non-x86 disassembler currently broken, need to find a pure rust disassembler alternative)
 - [x] Intel syntax
 - [x] AT&T syntax
 - [x] Linux x86_64 syscall reference
@@ -19,13 +19,13 @@ This is very much a WIP, but in my opinion it's already better to use compared t
 - [x] Memory viewer/editor
 - [x] Bad characters detection and highlight
 - [x] Multi-langueage shellcode formatting (raw hex, python, C, Rust)
+- [x] Instruction set reference
 - [x] In-browser support using wasm
 - [ ] Cross-platform support (Windows, macOS)
 - [ ] Cross-architecture debugging support (via emulation)
 - [ ] Native architecture debugger for non x86_64 architectures
 - [ ] Payload encoding (e.g. shellcode compression, encryption, badchars avoidance)
 - [ ] Payload encoding plugin system (using wasm plugins)
-- [ ] Instruction set reference
 
 ## Run
 To run the project, clone the repository and run:

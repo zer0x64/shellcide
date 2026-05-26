@@ -31,6 +31,15 @@ fn test_editor_panel_render() {
 }
 
 #[test]
+fn test_header_panel_render() {
+    let mut app = create_test_app(Vec::new());
+    let ctx = egui::Context::default();
+    let _ = ctx.run(egui::RawInput::default(), |ctx| {
+        crate::ui::header::render_header_panel(&mut app, ctx);
+    });
+}
+
+#[test]
 fn test_registers_panel_render() {
     let mut app = create_test_app(Vec::new());
     let prev = app.regs;
@@ -67,7 +76,10 @@ fn test_controls_panel_render() {
             op_str: String::new(),
         });
 
-    test_render(|ui| crate::ui::controls::render_controls_panel(&mut app, ui));
+    test_render(|ui| {
+        crate::ui::controls::render_controls_panel(&mut app, ui);
+        crate::ui::controls::render_console_panel(&mut app, ui);
+    });
 }
 
 #[test]
@@ -113,7 +125,10 @@ fn test_controls_panel_hides_debug_buttons_non_native() {
             op_str: String::new(),
         });
 
-    test_render(|ui| crate::ui::controls::render_controls_panel(&mut app, ui));
+    test_render(|ui| {
+        crate::ui::controls::render_controls_panel(&mut app, ui);
+        crate::ui::controls::render_console_panel(&mut app, ui);
+    });
 
     // Verification: target arch remains non-native
     assert_eq!(app.target_arch, TargetArch::Riscv);

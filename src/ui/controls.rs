@@ -1,4 +1,4 @@
-use crate::app::{ConsoleTab, ShellcideApp, TargetArch};
+use crate::app::{ConsoleTab, ShellcideApp};
 use crate::debugger::DebuggerCommand;
 use crate::ui::theme::{
     BRIGHT_RED, CYBER_CYAN, ICE_BLUE, MUSTARD_YELLOW, NEON_PINK, SLATE_GRAY, TOXIC_GREEN,
@@ -36,7 +36,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             app.do_assemble();
         }
 
-        if !cfg!(target_arch = "wasm32") && app.target_arch == TargetArch::X86_64 {
+        if app.is_native_debug() {
             ui.separator();
 
             // Run/Start
@@ -125,17 +125,15 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     ui.separator();
 
     // Disassembly Instruction View
-    let disasm_height = ui.available_height() - 250.0;
     egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
         .id_salt("disasm_scroll")
-        .max_height(disasm_height)
         .show(ui, |ui| {
             if app.disassembly.is_empty() {
                 ui.colored_label(Color32::GRAY, "(Assemble shellcode to view disassembly)");
             } else {
                 let bad_chars = crate::assembler::parse_bad_characters(&app.bad_chars_input);
-                let is_native =
-                    !cfg!(target_arch = "wasm32") && app.target_arch == TargetArch::X86_64;
+                let is_native = app.is_native_debug();
                 let mut clicked_bp = None;
                 let num_columns = if is_native { 6 } else { 4 };
                 egui::Grid::new("disasm_grid")
@@ -153,7 +151,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                 let bp_rich = highlight_if(
                                     egui::RichText::new(bp_text).monospace(),
                                     is_current,
-                               );
+                                );
                                 let bp_btn = ui.add(egui::Button::new(bp_rich).frame(false));
                                 if bp_btn.clicked() {
                                     clicked_bp = Some((addr, has_bp));
@@ -182,7 +180,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                     .monospace()
                                     .color(addr_color),
                                 is_current,
-                            );
+                             );
                             ui.label(addr_rich);
 
                             // 4. Hex machine bytes
@@ -252,35 +250,15 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 }
             }
         });
+}
 
-    ui.separator();
-
+pub fn render_console_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     // Logs Console with Tab layout
     ui.horizontal(|ui| {
-        if ui
-            .selectable_label(app.active_tab == ConsoleTab::Console, "Status Console")
-            .clicked()
-        {
-            app.active_tab = ConsoleTab::Console;
-        }
-        if ui
-            .selectable_label(app.active_tab == ConsoleTab::Stdout, "Stdout")
-            .clicked()
-        {
-            app.active_tab = ConsoleTab::Stdout;
-        }
-        if ui
-            .selectable_label(app.active_tab == ConsoleTab::Stderr, "Stderr")
-            .clicked()
-        {
-            app.active_tab = ConsoleTab::Stderr;
-        }
-        if ui
-            .selectable_label(app.active_tab == ConsoleTab::Shellcode, "Shellcode Output")
-            .clicked()
-        {
-            app.active_tab = ConsoleTab::Shellcode;
-        }
+        ui.selectable_value(&mut app.active_tab, ConsoleTab::Console, "Status Console");
+        ui.selectable_value(&mut app.active_tab, ConsoleTab::Stdout, "Stdout");
+        ui.selectable_value(&mut app.active_tab, ConsoleTab::Stderr, "Stderr");
+        ui.selectable_value(&mut app.active_tab, ConsoleTab::Shellcode, "Shellcode Output");
     });
 
     ui.separator();
@@ -288,8 +266,8 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     // Log Console text display
     if app.active_tab == ConsoleTab::Shellcode {
         egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
             .id_salt("shellcode_scroll")
-            .max_height(200.0)
             .show(ui, |ui| {
                 if app.compiled_bytes.is_empty() {
                     ui.colored_label(
@@ -336,8 +314,8 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         };
 
         egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
             .id_salt("console_scroll")
-            .max_height(200.0)
             .show(ui, |ui| {
                 let displayed_log = if active_log.is_empty() {
                     "(empty)"

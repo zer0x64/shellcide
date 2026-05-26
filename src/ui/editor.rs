@@ -1,39 +1,40 @@
-use crate::app::{ShellcideApp, TargetArch};
+use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
 use crate::ui::theme::{BRIGHT_RED, CYBER_CYAN, SLATE_GRAY};
 use eframe::egui::{self, Color32};
 
 fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax: bool) -> String {
     let mut s = String::new();
-    let comment_char = if att_syntax { "/* " } else { "; " };
-    let comment_end = if att_syntax { " */" } else { "" };
+    let (comment_char, comment_end) = if att_syntax { ("/* ", " */") } else { ("; ", "") };
 
     // Add comment detailing the signature
-    s.push_str(&format!("{}{}(", comment_char, info.entry_point));
     let args_str: Vec<&str> = info.args.iter().map(|arg| arg.arg_type).collect();
-    s.push_str(&args_str.join(", "));
-    s.push_str(&format!("){}\n", comment_end));
+    s.push_str(&format!("{}{}({}){}\n", comment_char, info.entry_point, args_str.join(", "), comment_end));
+
+    let (mov_op, imm_0, comment_style) = if att_syntax {
+        ("movq", "$0", "/* {} */")
+    } else {
+        ("mov", "0", "; {}")
+    };
 
     if att_syntax {
-        // AT&T Syntax
         s.push_str(&format!("movq ${}, %rax\n", info.nr));
-        for arg in info.args {
-            let reg_name = arg.reg; // has % prefix
-            let arg_name = crate::ui::syscalls::extract_arg_name(arg.arg_type);
-            s.push_str(&format!("movq $0, {}  /* {} */\n", reg_name, arg_name));
-        }
-        s.push_str("syscall\n");
     } else {
-        // Intel Syntax
         s.push_str(&format!("mov rax, {}\n", info.nr));
-        for arg in info.args {
-            // Strip % prefix
-            let reg_name = arg.reg.strip_prefix('%').unwrap_or(arg.reg);
-            let arg_name = crate::ui::syscalls::extract_arg_name(arg.arg_type);
-            s.push_str(&format!("mov {}, 0  ; {}\n", reg_name, arg_name));
-        }
-        s.push_str("syscall\n");
     }
+
+    for arg in info.args {
+        let reg_name = if att_syntax { arg.reg } else { arg.reg.strip_prefix('%').unwrap_or(arg.reg) };
+        let arg_name = crate::ui::syscalls::extract_arg_name(arg.arg_type);
+        let inst = if att_syntax {
+            format!("{} {}, {}", mov_op, imm_0, reg_name)
+        } else {
+            format!("{} {}, {}", mov_op, reg_name, imm_0)
+        };
+        let comment = comment_style.replace("{}", arg_name);
+        s.push_str(&format!("{}  {}\n", inst, comment));
+    }
+    s.push_str("syscall\n");
     s
 }
 
@@ -179,17 +180,15 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 let new_start_char = (start_char as i32 + delta_at_start).max(0) as usize;
                 let new_end_char = (end_char as i32 + delta_at_end).max(0) as usize;
 
-                let new_range = if range.primary.index <= range.secondary.index {
-                    egui::text::CCursorRange::two(
-                        egui::text::CCursor::new(new_start_char),
-                        egui::text::CCursor::new(new_end_char),
-                    )
+                let (new_primary, new_secondary) = if range.primary.index <= range.secondary.index {
+                    (new_start_char, new_end_char)
                 } else {
-                    egui::text::CCursorRange::two(
-                        egui::text::CCursor::new(new_end_char),
-                        egui::text::CCursor::new(new_start_char),
-                    )
+                    (new_end_char, new_start_char)
                 };
+                let new_range = egui::text::CCursorRange::two(
+                    egui::text::CCursor::new(new_primary),
+                    egui::text::CCursor::new(new_secondary),
+                );
 
                 state.cursor.set_char_range(Some(new_range));
                 state.store(ui.ctx(), text_edit_id);
@@ -231,8 +230,8 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
         let scroll_height = ui.available_height() - 200.0;
         egui::ScrollArea::vertical()
-            .id_salt("editor_scroll")
             .max_height(scroll_height)
+            .id_salt("editor_scroll")
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let row_height = ui.fonts(|f| f.row_height(&egui::FontId::monospace(14.0)));
@@ -244,8 +243,7 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         ui.add_space(margin_top);
 
                         let lines_count = app.code_input.lines().count().max(1);
-                        let is_native =
-                            !cfg!(target_arch = "wasm32") && app.target_arch == TargetArch::X86_64;
+                        let is_native = app.is_native_debug();
                         for i in 0..lines_count {
                             let has_bp = app.editor_breakpoints.contains(&i);
 
@@ -313,6 +311,7 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
                     // The TextEdit
                     egui::ScrollArea::horizontal()
+                        .auto_shrink([false, false])
                         .id_salt("editor_horiz_scroll")
                         .show(ui, |ui| {
                             ui.add(

@@ -21,6 +21,15 @@ pub enum TargetArch {
 }
 
 impl TargetArch {
+    pub const ALL: [TargetArch; 6] = [
+        TargetArch::X86_64,
+        TargetArch::X86,
+        TargetArch::Arm,
+        TargetArch::Thumb,
+        TargetArch::Aarch64,
+        TargetArch::Riscv,
+    ];
+
     pub fn display_name(&self) -> &'static str {
         match self {
             TargetArch::X86_64 => "x86_64",
@@ -161,23 +170,22 @@ impl ShellcideApp {
     }
 
     pub(crate) fn get_line_to_inst_mapping(&self) -> HashMap<usize, usize> {
-        let mut line_to_inst_idx = HashMap::new();
-        let mut inst_idx = 0;
-        for (line_idx, line) in self.code_input.lines().enumerate() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            if trimmed.ends_with(':') && !trimmed.contains(' ') {
-                continue;
-            }
-            if trimmed.starts_with(';') || trimmed.starts_with('#') {
-                continue;
-            }
-            line_to_inst_idx.insert(line_idx, inst_idx);
-            inst_idx += 1;
-        }
-        line_to_inst_idx
+        self.code_input
+            .lines()
+            .enumerate()
+            .filter_map(|(line_idx, line)| {
+                let trimmed = line.trim();
+                let is_comment = trimmed.starts_with(';') || trimmed.starts_with('#');
+                let is_label = trimmed.ends_with(':') && !trimmed.contains(' ');
+                if !trimmed.is_empty() && !is_comment && !is_label {
+                    Some(line_idx)
+                } else {
+                    None
+                }
+            })
+            .enumerate()
+            .map(|(inst_idx, line_idx)| (line_idx, inst_idx))
+            .collect()
     }
 
     pub(crate) fn get_inst_to_line_mapping(&self) -> HashMap<usize, usize> {
@@ -309,6 +317,10 @@ impl ShellcideApp {
         (self.regs.rsp as usize).saturating_sub(0x80) & !0xF
     }
 
+    pub(crate) fn is_native_debug(&self) -> bool {
+        !cfg!(target_arch = "wasm32") && self.target_arch == TargetArch::X86_64
+    }
+
     pub(crate) fn format_raw_hex(&self) -> String {
         self.compiled_bytes
             .iter()
@@ -401,6 +413,91 @@ impl ShellcideApp {
                 self.reg_change_times.insert(name.to_string(), now);
             }
         }
+    }
+
+    pub(crate) fn load_file(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        match std::fs::read_to_string(&self.active_path) {
+            Ok(content) => {
+                self.code_input = content;
+                self.log(&format!("[File] Loaded file: {}", self.active_path));
+            }
+            Err(e) => self.log(&format!("[File System Error] Failed to load: {}", e)),
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.load_file_wasm();
+    }
+
+    pub(crate) fn save_file(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        match std::fs::write(&self.active_path, &self.code_input) {
+            Ok(_) => self.log(&format!("[File] Saved to: {}", self.active_path)),
+            Err(e) => self.log(&format!("[File System Error] Failed to save: {}", e)),
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.save_file_wasm();
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn save_file_wasm(&self) {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let array = js_sys::Array::new();
+        array.push(&JsValue::from_str(&self.code_input));
+        let blob = web_sys::Blob::new_with_str_sequence(&array).unwrap();
+        let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+        let link = document.create_element("a").unwrap();
+        let html_link = link.dyn_into::<web_sys::HtmlAnchorElement>().unwrap();
+        html_link.set_href(&url);
+        html_link.set_download(&self.active_path);
+        let body = document.body().unwrap();
+        body.append_child(&html_link).unwrap();
+        html_link.click();
+        body.remove_child(&html_link).unwrap();
+        let _ = web_sys::Url::revoke_object_url(&url);
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn load_file_wasm(&self) {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let input = document.create_element("input").unwrap();
+        let html_input = input.dyn_into::<web_sys::HtmlInputElement>().unwrap();
+        html_input.set_type("file");
+        html_input.set_accept(".s,.asm,.txt,.bin,*");
+        let tx_clone = self.event_tx.clone();
+        let input_clone = html_input.clone();
+        let on_change = Closure::wrap(Box::new(move |_: web_sys::Event| {
+            if let Some(files) = input_clone.files() {
+                if let Some(file) = files.get(0) {
+                    let filename = file.name();
+                    let file_reader = web_sys::FileReader::new().unwrap();
+                    let tx_inner = tx_clone.clone();
+                    let file_reader_clone = file_reader.clone();
+                    let filename_clone = filename.clone();
+                    let on_load = Closure::wrap(Box::new(move |_: web_sys::Event| {
+                        if let Ok(result) = file_reader_clone.result() {
+                            if let Some(content) = result.as_string() {
+                                let _ = tx_inner.send(crate::debugger::DebuggerEvent::FileLoaded {
+                                    filename: filename_clone.clone(),
+                                    content,
+                                });
+                            }
+                        }
+                    }) as Box<dyn FnMut(_)>);
+                    file_reader.set_onload(Some(on_load.as_ref().unchecked_ref()));
+                    on_load.forget();
+                    file_reader.read_as_text(&file).unwrap();
+                }
+            }
+        }) as Box<dyn FnMut(_)>);
+        html_input.set_onchange(Some(on_change.as_ref().unchecked_ref()));
+        on_change.forget();
+        html_input.click();
     }
 }
 
@@ -541,20 +638,34 @@ impl eframe::App for ShellcideApp {
             });
 
         // Right Panel (Registers & Memory)
-        if !cfg!(target_arch = "wasm32") && self.target_arch == TargetArch::X86_64 {
+        if self.is_native_debug() {
             egui::SidePanel::right("right_panel")
                 .resizable(true)
                 .min_width(200.0)
                 .default_width(450.0)
                 .show(ctx, |ui| {
+                    egui::TopBottomPanel::bottom("right_memory_panel")
+                        .resizable(true)
+                        .default_height(350.0)
+                        .min_height(20.0)
+                        .max_height(1000.0)
+                        .show_inside(ui, |ui| {
+                            crate::ui::memory::render_memory_panel(self, ui);
+                        });
                     crate::ui::registers::render_registers_panel(self, ui);
-                    ui.separator();
-                    crate::ui::memory::render_memory_panel(self, ui);
                 });
         }
 
         // Center Panel (Controls, Disassembly, Logs Console)
         egui::CentralPanel::default().show(ctx, |ui| {
+            egui::TopBottomPanel::bottom("console_panel")
+                .resizable(true)
+                .default_height(200.0)
+                .min_height(20.0)
+                .max_height(1000.0)
+                .show_inside(ui, |ui| {
+                    crate::ui::controls::render_console_panel(self, ui);
+                });
             crate::ui::controls::render_controls_panel(self, ui);
         });
 
