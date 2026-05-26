@@ -1,5 +1,6 @@
 use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
+use crate::ui::theme::{CYBER_CYAN, SOFT_ORANGE};
 use eframe::egui::{self, Color32};
 
 fn lerp_color(from: Color32, to: Color32, t: f32) -> Color32 {
@@ -27,78 +28,27 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         let of = (rflags & 0x0800) != 0;
 
         ui.label("RFLAGS Bits:");
-        ui.colored_label(
-            if zf {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "ZF",
-        );
-        ui.colored_label(
-            if cf {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "CF",
-        );
-        ui.colored_label(
-            if sf {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "SF",
-        );
-        ui.colored_label(
-            if of {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "OF",
-        );
-        ui.colored_label(
-            if pf {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "PF",
-        );
-        ui.colored_label(
-            if af {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "AF",
-        );
-        ui.colored_label(
-            if tf {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "TF",
-        );
-        ui.colored_label(
-            if if_ {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "IF",
-        );
-        ui.colored_label(
-            if df {
-                Color32::from_rgb(0, 206, 201)
-            } else {
-                Color32::GRAY
-            },
-            "DF",
-        );
+        let flags = [
+            ("ZF", zf),
+            ("CF", cf),
+            ("SF", sf),
+            ("OF", of),
+            ("PF", pf),
+            ("AF", af),
+            ("TF", tf),
+            ("IF", if_),
+            ("DF", df),
+        ];
+        for (name, val) in flags {
+            ui.colored_label(
+                if val {
+                    CYBER_CYAN
+                } else {
+                    Color32::GRAY
+                },
+                name,
+            );
+        }
     });
 
     ui.separator();
@@ -153,8 +103,8 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             };
 
                         let name_color = lerp_color(
-                            Color32::from_rgb(0, 206, 201),
-                            Color32::from_rgb(250, 177, 160),
+                            CYBER_CYAN,
+                            SOFT_ORANGE,
                             animation_factor,
                         );
 
@@ -193,7 +143,7 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             let label_text = format!("0x{:016X}", val);
                             let val_color = lerp_color(
                                 Color32::WHITE,
-                                Color32::from_rgb(250, 177, 160),
+                                SOFT_ORANGE,
                                 animation_factor,
                             );
                             let val_label = ui.add(

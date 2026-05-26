@@ -1,5 +1,6 @@
 use crate::app::{ShellcideApp, TargetArch};
 use crate::debugger::DebuggerCommand;
+use crate::ui::theme::{BRIGHT_RED, CYBER_CYAN, SLATE_GRAY};
 use eframe::egui::{self, Color32};
 
 fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax: bool) -> String {
@@ -206,14 +207,14 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     let frame = if dnd_alpha > 0.0 {
         egui::Frame::group(ui.style())
             .fill(Color32::from_rgba_unmultiplied(
-                0,
-                206,
-                201,
+                CYBER_CYAN.r(),
+                CYBER_CYAN.g(),
+                CYBER_CYAN.b(),
                 (dnd_alpha * 10.0) as u8,
             ))
             .stroke(egui::Stroke::new(
                 2.0,
-                Color32::from_rgba_unmultiplied(0, 206, 201, (dnd_alpha * 255.0) as u8),
+                Color32::from_rgba_unmultiplied(CYBER_CYAN.r(), CYBER_CYAN.g(), CYBER_CYAN.b(), (dnd_alpha * 255.0) as u8),
             ))
             .inner_margin(4.0)
     } else {
@@ -260,10 +261,8 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                     .and_then(|&idx| app.disassembly.get(idx))
                                     .map(|inst| inst.address as usize);
 
-                                let was_present = app.editor_breakpoints.contains(&i);
-                                if was_present {
-                                    app.editor_breakpoints.remove(&i);
-                                } else {
+                                let was_present = app.editor_breakpoints.remove(&i);
+                                if !was_present {
                                     app.editor_breakpoints.insert(i);
                                 }
 
@@ -289,9 +288,9 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             }
 
                             let text_color = if is_native && has_bp {
-                                Color32::from_rgb(255, 118, 117)
+                                BRIGHT_RED
                             } else {
-                                Color32::from_rgb(99, 110, 114)
+                                SLATE_GRAY
                             };
 
                             let bp_char = if is_native && has_bp { "● " } else { "  " };
@@ -332,17 +331,26 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     });
 
     if let Some(payload) = dropped_payload {
-        let syscall_name = &*payload;
-        if let Some(s) = crate::syscalls::SYSCALLS
-            .iter()
-            .find(|s| s.name == syscall_name)
-        {
-            let boilerplate = generate_syscall_boilerplate(s, app.att_syntax);
-            app.insert_into_editor(ui.ctx(), &boilerplate);
+        let payload_str = &*payload;
+        if let Some(template) = payload_str.strip_prefix("inst:") {
+            app.insert_into_editor(ui.ctx(), template);
             app.log(&format!(
-                "[Editor] Inserted boilerplate for syscall: {}",
-                syscall_name
+                "[Editor] Inserted instruction template: {}",
+                template.trim()
             ));
+        } else {
+            let syscall_name = payload_str;
+            if let Some(s) = crate::syscalls::SYSCALLS
+                .iter()
+                .find(|s| s.name == syscall_name)
+            {
+                let boilerplate = generate_syscall_boilerplate(s, app.att_syntax);
+                app.insert_into_editor(ui.ctx(), &boilerplate);
+                app.log(&format!(
+                    "[Editor] Inserted boilerplate for syscall: {}",
+                    syscall_name
+                ));
+            }
         }
     }
 
@@ -370,8 +378,8 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 for &b in sorted_chars {
                     ui.label(
                         egui::RichText::new(format!("{:02x}", b))
-                            .monospace()
-                            .color(Color32::from_rgb(255, 118, 117)),
+                             .monospace()
+                             .color(BRIGHT_RED),
                     );
                 }
             });

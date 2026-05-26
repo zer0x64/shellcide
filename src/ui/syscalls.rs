@@ -1,5 +1,5 @@
 use crate::app::ShellcideApp;
-use eframe::egui::{self, Color32};
+use eframe::egui;
 
 pub(crate) fn extract_arg_name(arg_type: &str) -> &str {
     let trimmed = arg_type.trim();
@@ -45,7 +45,7 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     });
     ui.separator();
 
-    let search = app.syscall_search.trim().to_lowercase();
+    let search = app.syscall_search.trim();
 
     egui::ScrollArea::both()
         .id_salt("syscalls_scroll")
@@ -55,51 +55,10 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 .num_columns(9)
                 .spacing([12.0, 6.0])
                 .show(ui, |ui| {
-                    ui.label(
-                        egui::RichText::new("Drag")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("RAX")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("Name")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("RDI (1st)")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("RSI (2nd)")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("RDX (3rd)")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("R10 (4th)")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("R8 (5th)")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
-                    ui.label(
-                        egui::RichText::new("R9 (6th)")
-                            .strong()
-                            .color(Color32::from_rgb(0, 206, 201)),
-                    );
+                    let headers = ["Drag", "RAX", "Name", "RDI (1st)", "RSI (2nd)", "RDX (3rd)", "R10 (4th)", "R8 (5th)", "R9 (6th)"];
+                    for h in headers {
+                        crate::ui::theme::header_label(ui, h);
+                    }
                     ui.end_row();
 
                     let get_arg_by_reg =
@@ -113,12 +72,12 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
                     for s in crate::syscalls::SYSCALLS.iter() {
                         if !search.is_empty() {
-                            let matches_name = s.name.to_lowercase().contains(&search);
-                            let matches_nr = s.nr.to_string().contains(&search);
-                            let matches_entry = s.entry_point.to_lowercase().contains(&search);
+                            let matches_name = crate::ui::contains_case_insensitive(s.name, search);
+                            let matches_nr = crate::ui::contains_case_insensitive(&s.nr.to_string(), search);
+                            let matches_entry = crate::ui::contains_case_insensitive(s.entry_point, search);
                             let matches_args = s.args.iter().any(|arg| {
-                                arg.reg.to_lowercase().contains(&search)
-                                    || arg.arg_type.to_lowercase().contains(&search)
+                                crate::ui::contains_case_insensitive(arg.reg, search)
+                                    || crate::ui::contains_case_insensitive(arg.arg_type, search)
                             });
                             if !(matches_name || matches_nr || matches_entry || matches_args) {
                                 continue;
@@ -132,7 +91,7 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             ui.label(
                                 egui::RichText::new("⠿")
                                     .monospace()
-                                    .color(Color32::from_rgb(0, 206, 201)),
+                                    .color(crate::ui::theme::CYBER_CYAN),
                             );
                         });
 

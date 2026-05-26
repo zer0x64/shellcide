@@ -6,7 +6,8 @@ use std::sync::{Arc, Mutex};
 use crate::assembler::assemble;
 use crate::debugger::{CpuRegisters, DebuggerCommand, DebuggerEvent, Pid, CODE_BASE, DATA_BASE};
 use crate::disassembler::{disassemble_code, DisassembledInstruction};
-use crate::ui::struct_packer::{LeftBottomTab, StructPackerState};
+use crate::ui::LeftBottomTab;
+use crate::ui::struct_packer::StructPackerState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TargetArch {
@@ -17,6 +18,19 @@ pub enum TargetArch {
     Thumb,
     Aarch64,
     Riscv,
+}
+
+impl TargetArch {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            TargetArch::X86_64 => "x86_64",
+            TargetArch::X86 => "x86",
+            TargetArch::Arm => "ARM",
+            TargetArch::Thumb => "Thumb",
+            TargetArch::Aarch64 => "AArch64",
+            TargetArch::Riscv => "RISC-V",
+        }
+    }
 }
 
 pub struct ShellcideApp {
@@ -60,6 +74,7 @@ pub struct ShellcideApp {
     pub(crate) editing_memory_byte: Option<usize>,
     pub(crate) memory_byte_input: String,
     pub(crate) syscall_search: String,
+    pub(crate) instructions_search: String,
     pub(crate) bad_chars_input: String,
     pub(crate) bad_char_lines: std::collections::HashSet<usize>,
     pub(crate) reg_change_times: std::collections::HashMap<String, std::time::Instant>,
@@ -130,6 +145,7 @@ impl ShellcideApp {
             editing_memory_byte: None,
             memory_byte_input: String::new(),
             syscall_search: String::new(),
+            instructions_search: String::new(),
             bad_chars_input: "00".to_string(),
             bad_char_lines: HashSet::new(),
             reg_change_times: HashMap::new(),
@@ -503,6 +519,11 @@ impl eframe::App for ShellcideApp {
                         LeftBottomTab::StructPacker,
                         "Struct Packer",
                     );
+                    ui.selectable_value(
+                        &mut self.left_bottom_tab,
+                        LeftBottomTab::Instructions,
+                        "Instructions",
+                    );
                 });
                 ui.separator();
 
@@ -512,6 +533,9 @@ impl eframe::App for ShellcideApp {
                     }
                     LeftBottomTab::StructPacker => {
                         crate::ui::struct_packer::render_struct_packer_panel(self, ui);
+                    }
+                    LeftBottomTab::Instructions => {
+                        crate::ui::instructions::render_instructions_panel(self, ui);
                     }
                 }
             });
@@ -576,6 +600,7 @@ impl ShellcideApp {
             memory_byte_input: String::new(),
             compiled_bytes: bytes,
             syscall_search: String::new(),
+            instructions_search: String::new(),
             bad_chars_input: "00".to_string(),
             bad_char_lines: HashSet::new(),
             reg_change_times: HashMap::new(),

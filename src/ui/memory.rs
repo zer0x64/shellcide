@@ -1,5 +1,6 @@
 use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
+use crate::ui::theme::{CYBER_CYAN, NEON_PINK, LAUGHTER_PURPLE, SLATE_GRAY, ICE_BLUE};
 use eframe::egui::{self, Color32};
 
 fn highlight_stack_cell(
@@ -11,11 +12,11 @@ fn highlight_stack_cell(
         let rsp = app.regs.rsp as usize;
         let rbp = app.regs.rbp as usize;
         if byte_addr == rsp {
-            label = label.background_color(Color32::from_rgba_unmultiplied(253, 121, 168, 120));
+            label = label.background_color(Color32::from_rgba_unmultiplied(NEON_PINK.r(), NEON_PINK.g(), NEON_PINK.b(), 120));
         } else if byte_addr == rbp {
-            label = label.background_color(Color32::from_rgba_unmultiplied(162, 155, 254, 120));
+            label = label.background_color(Color32::from_rgba_unmultiplied(LAUGHTER_PURPLE.r(), LAUGHTER_PURPLE.g(), LAUGHTER_PURPLE.b(), 120));
         } else if (rsp + 1..rbp).contains(&byte_addr) {
-            label = label.background_color(Color32::from_rgba_unmultiplied(253, 121, 168, 30));
+            label = label.background_color(Color32::from_rgba_unmultiplied(NEON_PINK.r(), NEON_PINK.g(), NEON_PINK.b(), 30));
         }
     }
     label
@@ -86,7 +87,7 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 }
 
                 // Address offset label
-                ui.label(egui::RichText::new(format!("0x{:08X}{}", row_addr, suffix)).monospace().color(Color32::from_rgb(0, 206, 201)));
+                ui.label(egui::RichText::new(format!("0x{:08X}{}", row_addr, suffix)).monospace().color(CYBER_CYAN));
 
                 // Hex bytes
                 for c in 0..16 {
@@ -115,7 +116,7 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         }
                     } else {
                         let label_text = format!("{:02X}", byte_val);
-                        let label_color = if byte_val == 0 { Color32::from_rgb(99, 110, 114) } else { Color32::WHITE };
+                        let label_color = if byte_val == 0 { SLATE_GRAY } else { Color32::WHITE };
                         let label = egui::RichText::new(label_text).monospace().color(label_color);
                         let label = highlight_stack_cell(label, byte_addr, app);
                         let byte_label = ui.add(
@@ -141,7 +142,7 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         } else {
                             ".".to_string()
                         };
-                        let label = egui::RichText::new(char_str).monospace().color(Color32::from_rgb(116, 185, 255));
+                        let label = egui::RichText::new(char_str).monospace().color(ICE_BLUE);
                         let label = highlight_stack_cell(label, byte_addr, app);
                         ui.label(label);
                     }

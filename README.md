@@ -33,6 +33,11 @@ To run the project, clone the repository and run:
 cargo run
 ```
 
+To serve as a website, run:
+```bash
+trunk serve
+```
+
 ## Demo
 ![Shellcide GUI](./assets/screenshot1.png)  
 

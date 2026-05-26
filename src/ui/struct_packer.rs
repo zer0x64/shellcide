@@ -3,12 +3,6 @@ use eframe::egui::{self, Color32};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 #[derive(PartialEq, Clone, Copy, Debug)]
-pub(crate) enum LeftBottomTab {
-    Syscalls,
-    StructPacker,
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
 pub(crate) enum StructType {
     SockAddrIn,  // sockaddr_in (IPv4)
     SockAddrIn6, // sockaddr_in6 (IPv6)

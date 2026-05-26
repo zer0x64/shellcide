@@ -1,5 +1,28 @@
 use eframe::egui::{self, Color32, Stroke};
 
+pub const CYBER_CYAN: Color32 = Color32::from_rgb(0, 206, 201);
+pub const NEON_PINK: Color32 = Color32::from_rgb(253, 121, 168);
+pub const SOFT_ORANGE: Color32 = Color32::from_rgb(250, 177, 160);
+pub const ICE_BLUE: Color32 = Color32::from_rgb(116, 185, 255);
+pub const TOXIC_GREEN: Color32 = Color32::from_rgb(85, 239, 196);
+pub const SLATE_GRAY: Color32 = Color32::from_rgb(99, 110, 114);
+pub const BRIGHT_RED: Color32 = Color32::from_rgb(255, 118, 117);
+pub const MUSTARD_YELLOW: Color32 = Color32::from_rgb(254, 202, 87);
+pub const SOFT_GREEN: Color32 = Color32::from_rgb(180, 210, 180);
+pub const LAUGHTER_PURPLE: Color32 = Color32::from_rgb(162, 155, 254);
+pub const SOFT_WHITE: Color32 = Color32::from_rgb(223, 230, 233);
+pub const CHARCOAL: Color32 = Color32::from_rgb(33, 38, 45);
+pub const GLOOM_GRAY: Color32 = Color32::from_rgb(48, 54, 61);
+pub const LIGHT_GRAY: Color32 = Color32::from_rgb(201, 209, 217);
+
+pub(crate) fn header_label(ui: &mut egui::Ui, text: &str) {
+    ui.label(
+        egui::RichText::new(text)
+            .strong()
+            .color(CYBER_CYAN),
+    );
+}
+
 /// Custom Styling settings for Cyber Cyan dark theme interface.
 pub fn apply_cyber_cyan_theme(ctx: &egui::Context) {
     use egui::Visuals;
@@ -14,24 +37,25 @@ pub fn apply_cyber_cyan_theme(ctx: &egui::Context) {
 
     // Non-interactive items
     visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(22, 27, 34);
-    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, Color32::from_rgb(201, 209, 217));
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(48, 54, 61));
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, LIGHT_GRAY);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, GLOOM_GRAY);
 
     // Button states
-    visuals.widgets.inactive.bg_fill = Color32::from_rgb(33, 38, 45);
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, Color32::from_rgb(201, 209, 217));
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(48, 54, 61));
+    visuals.widgets.inactive.bg_fill = CHARCOAL;
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, LIGHT_GRAY);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, GLOOM_GRAY);
 
     // Hover styles: Highlights with Cyber Cyan Glow
-    visuals.widgets.hovered.bg_fill = Color32::from_rgb(48, 54, 61);
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::from_rgb(0, 206, 201));
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(0, 206, 201));
+    visuals.widgets.hovered.bg_fill = GLOOM_GRAY;
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, CYBER_CYAN);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, CYBER_CYAN);
 
     // Active styles: Pressed buttons
     visuals.widgets.active.bg_fill = Color32::from_rgb(56, 62, 70);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, Color32::from_rgb(0, 206, 201));
-    visuals.widgets.active.bg_stroke = Stroke::new(1.0, Color32::from_rgb(0, 206, 201));
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0, CYBER_CYAN);
+    visuals.widgets.active.bg_stroke = Stroke::new(1.0, CYBER_CYAN);
 
     style.visuals = visuals;
     ctx.set_style(style);
 }
+

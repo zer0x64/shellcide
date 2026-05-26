@@ -1,6 +1,7 @@
 pub mod controls;
 pub mod editor;
 pub mod header;
+pub mod instructions;
 pub mod memory;
 pub mod registers;
 pub mod struct_packer;
@@ -9,6 +10,23 @@ pub mod theme;
 
 #[cfg(test)]
 mod tests;
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub(crate) enum LeftBottomTab {
+    Syscalls,
+    StructPacker,
+    Instructions,
+}
+
+pub(crate) fn contains_case_insensitive(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+}
 
 pub(crate) fn parse_u64_input(input: &str) -> Option<u64> {
     let clean = input.trim();

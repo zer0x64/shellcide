@@ -1,10 +1,18 @@
 use crate::app::{ConsoleTab, ShellcideApp, TargetArch};
 use crate::debugger::DebuggerCommand;
+use crate::ui::theme::{
+    BRIGHT_RED, CYBER_CYAN, ICE_BLUE, MUSTARD_YELLOW, NEON_PINK, SLATE_GRAY, TOXIC_GREEN,
+};
 use eframe::egui::{self, Color32};
 
 fn highlight_if(mut text: egui::RichText, cond: bool) -> egui::RichText {
     if cond {
-        text = text.background_color(Color32::from_rgba_unmultiplied(0, 206, 201, 30));
+        text = text.background_color(Color32::from_rgba_unmultiplied(
+            CYBER_CYAN.r(),
+            CYBER_CYAN.g(),
+            CYBER_CYAN.b(),
+            30,
+        ));
     }
     text
 }
@@ -23,7 +31,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     // Command buttons
     ui.horizontal(|ui| {
         // Assemble Code
-        let compile_btn = dbg_button(ui, true, "⚙ Assemble", Color32::from_rgb(116, 185, 255));
+        let compile_btn = dbg_button(ui, true, "⚙ Assemble", ICE_BLUE);
         if compile_btn.clicked() {
             app.do_assemble();
         }
@@ -37,7 +45,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 ui,
                 run_enabled && !app.is_running,
                 "▶ Run / Debug",
-                Color32::from_rgb(85, 239, 196),
+                TOXIC_GREEN,
             );
             if start_btn.clicked() {
                 app.log("[+] Spawning tracee process in background...");
@@ -59,7 +67,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 ui,
                 app.is_running && app.is_stopped,
                 "➡ Step Into",
-                Color32::from_rgb(253, 121, 168),
+                NEON_PINK,
             );
             if step_btn.clicked() {
                 app.cmd_tx.send(DebuggerCommand::Step).unwrap();
@@ -70,7 +78,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 ui,
                 app.is_running && app.is_stopped,
                 "⏩ Continue",
-                Color32::from_rgb(0, 206, 201),
+                CYBER_CYAN,
             );
             if cont_btn.clicked() {
                 app.cmd_tx.send(DebuggerCommand::Continue).unwrap();
@@ -81,7 +89,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 ui,
                 app.is_running && !app.is_stopped,
                 "⏸ Pause",
-                Color32::from_rgb(254, 202, 87),
+                MUSTARD_YELLOW,
             );
             if pause_btn.clicked() {
                 app.cmd_tx.send(DebuggerCommand::Pause).unwrap();
@@ -92,7 +100,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 ui,
                 app.is_running,
                 "⏹ Stop",
-                Color32::from_rgb(255, 118, 117),
+                BRIGHT_RED,
             );
             if stop_btn.clicked() {
                 app.cmd_tx.send(DebuggerCommand::Terminate).unwrap();
@@ -110,7 +118,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 egui::RichText::new(size_text)
                     .monospace()
                     .strong()
-                    .color(Color32::from_rgb(0, 206, 201)),
+                    .color(CYBER_CYAN),
             );
         }
     });
@@ -145,7 +153,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                 let bp_rich = highlight_if(
                                     egui::RichText::new(bp_text).monospace(),
                                     is_current,
-                                );
+                               );
                                 let bp_btn = ui.add(egui::Button::new(bp_rich).frame(false));
                                 if bp_btn.clicked() {
                                     clicked_bp = Some((addr, has_bp));
@@ -157,7 +165,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                     egui::RichText::new(rip_indicator)
                                         .monospace()
                                         .strong()
-                                        .color(Color32::from_rgb(0, 206, 201)),
+                                        .color(CYBER_CYAN),
                                     is_current,
                                 );
                                 ui.label(rip_rich);
@@ -165,7 +173,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
                             // 3. Instruction address
                             let addr_color = if is_current {
-                                Color32::from_rgb(0, 206, 201)
+                                CYBER_CYAN
                             } else {
                                 Color32::GRAY
                             };
@@ -183,11 +191,11 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                 for &b in &inst.bytes {
                                     let is_bad = bad_chars.contains(&b);
                                     let b_color = if is_bad {
-                                        Color32::from_rgb(255, 118, 117)
+                                        BRIGHT_RED
                                     } else if is_current {
-                                        Color32::from_rgb(116, 185, 255)
+                                        ICE_BLUE
                                     } else {
-                                        Color32::from_rgb(99, 110, 114)
+                                        SLATE_GRAY
                                     };
                                     let mut text = egui::RichText::new(format!("{:02X}", b))
                                         .monospace()
@@ -202,7 +210,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
                             // 5. Mnemonic & Opcode operands
                             let text_color = if is_current {
-                                Color32::from_rgb(0, 206, 201)
+                                CYBER_CYAN
                             } else {
                                 Color32::WHITE
                             };
@@ -301,7 +309,7 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             ui.label(
                                 egui::RichText::new(label)
                                     .strong()
-                                    .color(Color32::from_rgb(0, 206, 201)),
+                                    .color(CYBER_CYAN),
                             );
                             if ui.button("📋 Copy").clicked() {
                                 ui.ctx().copy_text(val.clone());

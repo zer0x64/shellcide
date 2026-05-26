@@ -1,16 +1,18 @@
 use crate::app::{ShellcideApp, TargetArch};
-use eframe::egui::{self, Color32};
+use crate::ui::theme::CYBER_CYAN;
+use eframe::egui;
 
 pub fn render_header_panel(app: &mut ShellcideApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
         ui.horizontal(|ui| {
-            let title = match app.target_arch {
-                TargetArch::X86_64 => "SHELLCIDE // X86_64 IDE & DEBUGGER".to_string(),
-                other => format!("SHELLCIDE // {:?} IDE", other).to_uppercase(),
+            let title = if app.target_arch == TargetArch::X86_64 {
+                "SHELLCIDE // X86_64 IDE & DEBUGGER".to_string()
+            } else {
+                format!("SHELLCIDE // {} IDE", app.target_arch.display_name()).to_uppercase()
             };
             ui.heading(
                 egui::RichText::new(title)
-                    .color(Color32::from_rgb(0, 206, 201))
+                    .color(CYBER_CYAN)
                     .strong(),
             );
 
