@@ -1,6 +1,6 @@
+use crate::app::ShellcideApp;
 use eframe::egui::{self, Color32};
 use std::net::{Ipv4Addr, Ipv6Addr};
-use crate::app::ShellcideApp;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub(crate) enum LeftBottomTab {
@@ -10,10 +10,10 @@ pub(crate) enum LeftBottomTab {
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub(crate) enum StructType {
-    SockAddrIn,   // sockaddr_in (IPv4)
-    SockAddrIn6,  // sockaddr_in6 (IPv6)
-    SockAddrUn,   // sockaddr_un (Unix)
-    SockAddr,     // sockaddr (Generic)
+    SockAddrIn,  // sockaddr_in (IPv4)
+    SockAddrIn6, // sockaddr_in6 (IPv6)
+    SockAddrUn,  // sockaddr_un (Unix)
+    SockAddr,    // sockaddr (Generic)
 }
 
 pub(crate) struct StructPackerState {
@@ -63,12 +63,15 @@ impl StructPackerState {
     pub(crate) fn pack(&self, att_syntax: bool) -> Result<PackedResult, String> {
         match self.selected_struct {
             StructType::SockAddrIn => {
-                let ip: Ipv4Addr = self.ipv4_addr.trim().parse()
+                let ip: Ipv4Addr = self
+                    .ipv4_addr
+                    .trim()
+                    .parse()
                     .map_err(|e| format!("Invalid IPv4 address: {}", e))?;
-                
+
                 let port_bytes = self.ipv4_port.to_be_bytes();
                 let ip_octets = ip.octets();
-                
+
                 let mut bytes = Vec::new();
                 bytes.extend_from_slice(&(2u16).to_ne_bytes()); // AF_INET = 2
                 bytes.extend_from_slice(&port_bytes);
@@ -87,8 +90,14 @@ impl StructPackerState {
                         format!("sin_port = {} (network byte order)", self.ipv4_port),
                     ),
                     (
-                        format!("db {}, {}, {}, {}", ip_octets[0], ip_octets[1], ip_octets[2], ip_octets[3]),
-                        format!(".byte {}, {}, {}, {}", ip_octets[0], ip_octets[1], ip_octets[2], ip_octets[3]),
+                        format!(
+                            "db {}, {}, {}, {}",
+                            ip_octets[0], ip_octets[1], ip_octets[2], ip_octets[3]
+                        ),
+                        format!(
+                            ".byte {}, {}, {}, {}",
+                            ip_octets[0], ip_octets[1], ip_octets[2], ip_octets[3]
+                        ),
                         format!("sin_addr = {}", ip),
                     ),
                     (
@@ -98,7 +107,11 @@ impl StructPackerState {
                     ),
                 ];
 
-                let assembly = format_owned_assembly_block(&lines, att_syntax, &format!("sockaddr_in (IPv4: {}, Port: {})", ip, self.ipv4_port));
+                let assembly = format_owned_assembly_block(
+                    &lines,
+                    att_syntax,
+                    &format!("sockaddr_in (IPv4: {}, Port: {})", ip, self.ipv4_port),
+                );
 
                 Ok(PackedResult {
                     full_bytes: bytes.clone(),
@@ -108,14 +121,17 @@ impl StructPackerState {
                 })
             }
             StructType::SockAddrIn6 => {
-                let ip: Ipv6Addr = self.ipv6_addr.trim().parse()
+                let ip: Ipv6Addr = self
+                    .ipv6_addr
+                    .trim()
+                    .parse()
                     .map_err(|e| format!("Invalid IPv6 address: {}", e))?;
-                
+
                 let port_bytes = self.ipv6_port.to_be_bytes();
                 let flow_bytes = self.ipv6_flowinfo.to_be_bytes();
                 let ip_octets = ip.octets();
                 let scope_bytes = self.ipv6_scope_id.to_ne_bytes();
-                
+
                 let mut bytes = Vec::new();
                 bytes.extend_from_slice(&(10u16).to_ne_bytes()); // AF_INET6 = 10
                 bytes.extend_from_slice(&port_bytes);
@@ -123,9 +139,21 @@ impl StructPackerState {
                 bytes.extend_from_slice(&ip_octets);
                 bytes.extend_from_slice(&scope_bytes);
 
-                let ip_octets_str = ip_octets.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
-                let flow_bytes_str = flow_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
-                let scope_bytes_str = scope_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
+                let ip_octets_str = ip_octets
+                    .iter()
+                    .map(|b| format!("0x{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let flow_bytes_str = flow_bytes
+                    .iter()
+                    .map(|b| format!("0x{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let scope_bytes_str = scope_bytes
+                    .iter()
+                    .map(|b| format!("0x{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(", ");
 
                 let lines = vec![
                     (
@@ -155,7 +183,11 @@ impl StructPackerState {
                     ),
                 ];
 
-                let assembly = format_owned_assembly_block(&lines, att_syntax, &format!("sockaddr_in6 (IPv6: {}, Port: {})", ip, self.ipv6_port));
+                let assembly = format_owned_assembly_block(
+                    &lines,
+                    att_syntax,
+                    &format!("sockaddr_in6 (IPv6: {}, Port: {})", ip, self.ipv6_port),
+                );
 
                 Ok(PackedResult {
                     full_bytes: bytes.clone(),
@@ -176,7 +208,10 @@ impl StructPackerState {
                 }
 
                 if path_bytes.len() > 108 {
-                    return Err(format!("Unix socket path is too long ({} bytes, max 108)", path_bytes.len()));
+                    return Err(format!(
+                        "Unix socket path is too long ({} bytes, max 108)",
+                        path_bytes.len()
+                    ));
                 }
 
                 let mut full_path_bytes = path_bytes.clone();
@@ -194,11 +229,18 @@ impl StructPackerState {
                 let path_desc = if self.unix_abstract {
                     format!("abstract: {:?}", String::from_utf8_lossy(&path_bytes[1..]))
                 } else {
-                    format!("{:?}", String::from_utf8_lossy(&path_bytes[..path_bytes.len() - 1]))
+                    format!(
+                        "{:?}",
+                        String::from_utf8_lossy(&path_bytes[..path_bytes.len() - 1])
+                    )
                 };
 
                 // Full assembly representation
-                let full_path_str = full_path_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
+                let full_path_str = full_path_bytes
+                    .iter()
+                    .map(|b| format!("0x{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 let lines_full = vec![
                     (
                         "dw 1".to_string(),
@@ -212,10 +254,21 @@ impl StructPackerState {
                     ),
                 ];
 
-                let assembly_full = format_owned_assembly_block(&lines_full, att_syntax, &format!("sockaddr_un (Unix: {}) - Full 110-byte struct", self.unix_path));
+                let assembly_full = format_owned_assembly_block(
+                    &lines_full,
+                    att_syntax,
+                    &format!(
+                        "sockaddr_un (Unix: {}) - Full 110-byte struct",
+                        self.unix_path
+                    ),
+                );
 
                 // Minimal assembly representation
-                let min_path_str = path_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
+                let min_path_str = path_bytes
+                    .iter()
+                    .map(|b| format!("0x{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 let lines_min = vec![
                     (
                         "dw 1".to_string(),
@@ -229,7 +282,14 @@ impl StructPackerState {
                     ),
                 ];
 
-                let assembly_minimal = format_owned_assembly_block(&lines_min, att_syntax, &format!("sockaddr_un (Unix: {}) - Minimal {} bytes", self.unix_path, minimal_len));
+                let assembly_minimal = format_owned_assembly_block(
+                    &lines_min,
+                    att_syntax,
+                    &format!(
+                        "sockaddr_un (Unix: {}) - Minimal {} bytes",
+                        self.unix_path, minimal_len
+                    ),
+                );
 
                 Ok(PackedResult {
                     full_bytes,
@@ -241,7 +301,10 @@ impl StructPackerState {
             StructType::SockAddr => {
                 let data_bytes = parse_hex_string(&self.generic_data)?;
                 if data_bytes.len() > 14 {
-                    return Err(format!("Generic sockaddr data too long ({} bytes, max 14)", data_bytes.len()));
+                    return Err(format!(
+                        "Generic sockaddr data too long ({} bytes, max 14)",
+                        data_bytes.len()
+                    ));
                 }
 
                 let mut full_data_bytes = data_bytes.clone();
@@ -257,7 +320,11 @@ impl StructPackerState {
                 minimal_bytes.extend_from_slice(&data_bytes);
 
                 // Full assembly
-                let full_data_str = full_data_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
+                let full_data_str = full_data_bytes
+                    .iter()
+                    .map(|b| format!("0x{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 let lines_full = vec![
                     (
                         format!("dw {}", self.generic_family),
@@ -271,10 +338,18 @@ impl StructPackerState {
                     ),
                 ];
 
-                let assembly_full = format_owned_assembly_block(&lines_full, att_syntax, "sockaddr (Generic) - Full 16-byte struct");
+                let assembly_full = format_owned_assembly_block(
+                    &lines_full,
+                    att_syntax,
+                    "sockaddr (Generic) - Full 16-byte struct",
+                );
 
                 // Minimal assembly
-                let min_data_str = data_bytes.iter().map(|b| format!("0x{:02X}", b)).collect::<Vec<_>>().join(", ");
+                let min_data_str = data_bytes
+                    .iter()
+                    .map(|b| format!("0x{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 let lines_min = vec![
                     (
                         format!("dw {}", self.generic_family),
@@ -288,7 +363,11 @@ impl StructPackerState {
                     ),
                 ];
 
-                let assembly_minimal = format_owned_assembly_block(&lines_min, att_syntax, &format!("sockaddr (Generic) - Minimal {} bytes", minimal_len));
+                let assembly_minimal = format_owned_assembly_block(
+                    &lines_min,
+                    att_syntax,
+                    &format!("sockaddr (Generic) - Minimal {} bytes", minimal_len),
+                );
 
                 Ok(PackedResult {
                     full_bytes,
@@ -306,7 +385,8 @@ fn format_owned_assembly_block(
     att_syntax: bool,
     description: &str,
 ) -> String {
-    let lines_ref: Vec<(&str, &str, &str)> = lines.iter()
+    let lines_ref: Vec<(&str, &str, &str)> = lines
+        .iter()
         .map(|(intel, att, comm)| (intel.as_str(), att.as_str(), comm.as_str()))
         .collect();
     format_assembly_block(&lines_ref, att_syntax, description)
@@ -384,13 +464,17 @@ fn parse_escaped_string(s: &str) -> Result<Vec<u8>, String> {
 
 fn parse_hex_string(s: &str) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
-    let cleaned: String = s.chars().filter(|c| !c.is_whitespace() && *c != ',').collect();
+    let cleaned: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != ',')
+        .collect();
     if !cleaned.len().is_multiple_of(2) {
         return Err("Hex string must have an even number of characters".to_string());
     }
     for chunk in cleaned.as_bytes().chunks(2) {
         let s = std::str::from_utf8(chunk).map_err(|e| e.to_string())?;
-        let val = u8::from_str_radix(s, 16).map_err(|e| format!("Invalid hex byte '{}': {}", s, e))?;
+        let val =
+            u8::from_str_radix(s, 16).map_err(|e| format!("Invalid hex byte '{}': {}", s, e))?;
         bytes.push(val);
     }
     Ok(bytes)
@@ -402,10 +486,26 @@ pub fn render_struct_packer_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
     // Structure selector
     ui.horizontal(|ui| {
-        ui.selectable_value(&mut app.struct_packer.selected_struct, StructType::SockAddrIn, "IPv4");
-        ui.selectable_value(&mut app.struct_packer.selected_struct, StructType::SockAddrIn6, "IPv6");
-        ui.selectable_value(&mut app.struct_packer.selected_struct, StructType::SockAddrUn, "Unix");
-        ui.selectable_value(&mut app.struct_packer.selected_struct, StructType::SockAddr, "Generic");
+        ui.selectable_value(
+            &mut app.struct_packer.selected_struct,
+            StructType::SockAddrIn,
+            "IPv4",
+        );
+        ui.selectable_value(
+            &mut app.struct_packer.selected_struct,
+            StructType::SockAddrIn6,
+            "IPv6",
+        );
+        ui.selectable_value(
+            &mut app.struct_packer.selected_struct,
+            StructType::SockAddrUn,
+            "Unix",
+        );
+        ui.selectable_value(
+            &mut app.struct_packer.selected_struct,
+            StructType::SockAddr,
+            "Generic",
+        );
     });
     ui.separator();
 
@@ -413,52 +513,62 @@ pub fn render_struct_packer_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     egui::Grid::new("struct_packer_inputs_grid")
         .num_columns(2)
         .spacing([12.0, 8.0])
-        .show(ui, |ui| {
-            match app.struct_packer.selected_struct {
-                StructType::SockAddrIn => {
-                    ui.label("IP Address:");
-                    ui.add(egui::TextEdit::singleline(&mut app.struct_packer.ipv4_addr).desired_width(180.0));
-                    ui.end_row();
-                    
-                    ui.label("Port:");
-                    ui.add(egui::DragValue::new(&mut app.struct_packer.ipv4_port).range(1..=65535));
-                    ui.end_row();
-                }
-                StructType::SockAddrIn6 => {
-                    ui.label("IPv6 Address:");
-                    ui.add(egui::TextEdit::singleline(&mut app.struct_packer.ipv6_addr).desired_width(180.0));
-                    ui.end_row();
-                    
-                    ui.label("Port:");
-                    ui.add(egui::DragValue::new(&mut app.struct_packer.ipv6_port).range(1..=65535));
-                    ui.end_row();
+        .show(ui, |ui| match app.struct_packer.selected_struct {
+            StructType::SockAddrIn => {
+                ui.label("IP Address:");
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.struct_packer.ipv4_addr)
+                        .desired_width(180.0),
+                );
+                ui.end_row();
 
-                    ui.label("Flow Info:");
-                    ui.add(egui::DragValue::new(&mut app.struct_packer.ipv6_flowinfo));
-                    ui.end_row();
+                ui.label("Port:");
+                ui.add(egui::DragValue::new(&mut app.struct_packer.ipv4_port).range(1..=65535));
+                ui.end_row();
+            }
+            StructType::SockAddrIn6 => {
+                ui.label("IPv6 Address:");
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.struct_packer.ipv6_addr)
+                        .desired_width(180.0),
+                );
+                ui.end_row();
 
-                    ui.label("Scope ID:");
-                    ui.add(egui::DragValue::new(&mut app.struct_packer.ipv6_scope_id));
-                    ui.end_row();
-                }
-                StructType::SockAddrUn => {
-                    ui.label("Socket Path:");
-                    ui.add(egui::TextEdit::singleline(&mut app.struct_packer.unix_path).desired_width(180.0));
-                    ui.end_row();
-                    
-                    ui.label("Abstract Namespace:");
-                    ui.checkbox(&mut app.struct_packer.unix_abstract, "Prefix with \\0");
-                    ui.end_row();
-                }
-                StructType::SockAddr => {
-                    ui.label("Address Family:");
-                    ui.add(egui::DragValue::new(&mut app.struct_packer.generic_family));
-                    ui.end_row();
+                ui.label("Port:");
+                ui.add(egui::DragValue::new(&mut app.struct_packer.ipv6_port).range(1..=65535));
+                ui.end_row();
 
-                    ui.label("Data (Hex):");
-                    ui.add(egui::TextEdit::singleline(&mut app.struct_packer.generic_data).desired_width(180.0));
-                    ui.end_row();
-                }
+                ui.label("Flow Info:");
+                ui.add(egui::DragValue::new(&mut app.struct_packer.ipv6_flowinfo));
+                ui.end_row();
+
+                ui.label("Scope ID:");
+                ui.add(egui::DragValue::new(&mut app.struct_packer.ipv6_scope_id));
+                ui.end_row();
+            }
+            StructType::SockAddrUn => {
+                ui.label("Socket Path:");
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.struct_packer.unix_path)
+                        .desired_width(180.0),
+                );
+                ui.end_row();
+
+                ui.label("Abstract Namespace:");
+                ui.checkbox(&mut app.struct_packer.unix_abstract, "Prefix with \\0");
+                ui.end_row();
+            }
+            StructType::SockAddr => {
+                ui.label("Address Family:");
+                ui.add(egui::DragValue::new(&mut app.struct_packer.generic_family));
+                ui.end_row();
+
+                ui.label("Data (Hex):");
+                ui.add(
+                    egui::TextEdit::singleline(&mut app.struct_packer.generic_data)
+                        .desired_width(180.0),
+                );
+                ui.end_row();
             }
         });
 
@@ -467,20 +577,46 @@ pub fn render_struct_packer_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     // Packing and Rendering Output
     match app.struct_packer.pack(app.att_syntax) {
         Ok(result) => {
-            egui::ScrollArea::vertical().id_salt("packer_output_scroll").show(ui, |ui| {
-                let show_minimal = result.full_bytes != result.minimal_bytes;
+            egui::ScrollArea::vertical()
+                .id_salt("packer_output_scroll")
+                .show(ui, |ui| {
+                    let show_minimal = result.full_bytes != result.minimal_bytes;
 
-                if show_minimal {
-                    ui.collapsing(format!("Minimal Representation ({} bytes)", result.minimal_bytes.len()), |ui| {
-                        render_packed_output_details(ui, app, &result.minimal_bytes, &result.assembly_minimal);
-                    });
-                    ui.collapsing(format!("Full Structure ({} bytes)", result.full_bytes.len()), |ui| {
-                        render_packed_output_details(ui, app, &result.full_bytes, &result.assembly_full);
-                    });
-                } else {
-                    render_packed_output_details(ui, app, &result.full_bytes, &result.assembly_full);
-                }
-            });
+                    if show_minimal {
+                        ui.collapsing(
+                            format!(
+                                "Minimal Representation ({} bytes)",
+                                result.minimal_bytes.len()
+                            ),
+                            |ui| {
+                                render_packed_output_details(
+                                    ui,
+                                    app,
+                                    &result.minimal_bytes,
+                                    &result.assembly_minimal,
+                                );
+                            },
+                        );
+                        ui.collapsing(
+                            format!("Full Structure ({} bytes)", result.full_bytes.len()),
+                            |ui| {
+                                render_packed_output_details(
+                                    ui,
+                                    app,
+                                    &result.full_bytes,
+                                    &result.assembly_full,
+                                );
+                            },
+                        );
+                    } else {
+                        render_packed_output_details(
+                            ui,
+                            app,
+                            &result.full_bytes,
+                            &result.assembly_full,
+                        );
+                    }
+                });
         }
         Err(err) => {
             ui.horizontal(|ui| {
@@ -518,10 +654,16 @@ fn format_stack_push_assembly(bytes: &[u8], att_syntax: bool) -> String {
             let start_byte = i * 8;
             let end_byte = (i * 8 + 7).min(bytes.len() - 1);
             if val <= 0x7FFFFFFF {
-                out.push_str(&format!("pushq $0x{:08X}   /* bytes {}..{} */\n", val, start_byte, end_byte));
+                out.push_str(&format!(
+                    "pushq $0x{:08X}   /* bytes {}..{} */\n",
+                    val, start_byte, end_byte
+                ));
             } else {
                 out.push_str(&format!("movabs $0x{:016X}, %rax\n", val));
-                out.push_str(&format!("pushq %rax         /* bytes {}..{} */\n", start_byte, end_byte));
+                out.push_str(&format!(
+                    "pushq %rax         /* bytes {}..{} */\n",
+                    start_byte, end_byte
+                ));
             }
         }
     } else {
@@ -530,17 +672,28 @@ fn format_stack_push_assembly(bytes: &[u8], att_syntax: bool) -> String {
             let start_byte = i * 8;
             let end_byte = (i * 8 + 7).min(bytes.len() - 1);
             if val <= 0x7FFFFFFF {
-                out.push_str(&format!("push 0x{:08X}      ; bytes {}..{}\n", val, start_byte, end_byte));
+                out.push_str(&format!(
+                    "push 0x{:08X}      ; bytes {}..{}\n",
+                    val, start_byte, end_byte
+                ));
             } else {
                 out.push_str(&format!("mov rax, 0x{:016X}\n", val));
-                out.push_str(&format!("push rax           ; bytes {}..{}\n", start_byte, end_byte));
+                out.push_str(&format!(
+                    "push rax           ; bytes {}..{}\n",
+                    start_byte, end_byte
+                ));
             }
         }
     }
     out
 }
 
-fn render_packed_output_details(ui: &mut egui::Ui, app: &mut ShellcideApp, bytes: &[u8], assembly: &str) {
+fn render_packed_output_details(
+    ui: &mut egui::Ui,
+    app: &mut ShellcideApp,
+    bytes: &[u8],
+    assembly: &str,
+) {
     // 1. Action buttons
     ui.horizontal(|ui| {
         if ui.button("➕ Insert Assembly at Cursor").clicked() {
@@ -560,13 +713,16 @@ fn render_packed_output_details(ui: &mut egui::Ui, app: &mut ShellcideApp, bytes
             .font(egui::FontId::monospace(12.0))
             .desired_rows(4)
             .desired_width(f32::INFINITY)
-            .interactive(false)
+            .interactive(false),
     );
 
     ui.add_space(4.0);
 
     // 3. Hex & Python/C representations
-    let hex_str = bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+    let hex_str = bytes
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>();
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("Hex:").weak());
         ui.monospace(&hex_str);
@@ -579,7 +735,11 @@ fn render_packed_output_details(ui: &mut egui::Ui, app: &mut ShellcideApp, bytes
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("Little-Endian (64-bit):").weak());
         ui.monospace(&le_hex_str);
-        if ui.button("📋").on_hover_text("Copy Little-Endian hex").clicked() {
+        if ui
+            .button("📋")
+            .on_hover_text("Copy Little-Endian hex")
+            .clicked()
+        {
             ui.ctx().copy_text(le_hex_str);
         }
     });
@@ -593,7 +753,11 @@ fn render_packed_output_details(ui: &mut egui::Ui, app: &mut ShellcideApp, bytes
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("Python/C:").weak());
         ui.monospace(&py_str);
-        if ui.button("📋").on_hover_text("Copy Python/C buffer").clicked() {
+        if ui
+            .button("📋")
+            .on_hover_text("Copy Python/C buffer")
+            .clicked()
+        {
             ui.ctx().copy_text(py_str);
         }
     });
@@ -617,7 +781,7 @@ fn render_packed_output_details(ui: &mut egui::Ui, app: &mut ShellcideApp, bytes
                 .font(egui::FontId::monospace(12.0))
                 .desired_rows(4)
                 .desired_width(f32::INFINITY)
-                .interactive(false)
+                .interactive(false),
         );
     });
 }
@@ -636,8 +800,14 @@ mod tests {
 
     #[test]
     fn test_parse_hex_string() {
-        assert_eq!(parse_hex_string("00 11 22").unwrap(), vec![0x00, 0x11, 0x22]);
-        assert_eq!(parse_hex_string("aa, bb, cc").unwrap(), vec![0xaa, 0xbb, 0xcc]);
+        assert_eq!(
+            parse_hex_string("00 11 22").unwrap(),
+            vec![0x00, 0x11, 0x22]
+        );
+        assert_eq!(
+            parse_hex_string("aa, bb, cc").unwrap(),
+            vec![0xaa, 0xbb, 0xcc]
+        );
         assert!(parse_hex_string("a").is_err());
     }
 
@@ -674,7 +844,7 @@ mod tests {
         assert_eq!(res.full_bytes[0..2], (10u16).to_ne_bytes());
         assert_eq!(res.full_bytes[2..4], 8080u16.to_be_bytes());
         assert_eq!(res.full_bytes[4..8], [0; 4]); // flowinfo
-        
+
         let mut expected_ip = [0u8; 16];
         expected_ip[15] = 1;
         assert_eq!(res.full_bytes[8..24], expected_ip);
@@ -714,4 +884,3 @@ mod tests {
         assert!(assembly.contains("push rax"));
     }
 }
-

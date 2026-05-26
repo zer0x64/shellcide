@@ -1,13 +1,39 @@
-use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::unix::io::FromRawFd;
+#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
+
 use flume::{Receiver, Sender};
-use std::thread;
+use std::collections::HashMap;
+
+#[cfg(not(target_arch = "wasm32"))]
 use nix::sys::ptrace;
-use nix::sys::signal::Signal;
-use nix::sys::wait::{waitpid, WaitStatus, WaitPidFlag};
-use nix::unistd::Pid;
+#[cfg(not(target_arch = "wasm32"))]
+use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs::{File, OpenOptions};
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::{Read, Seek, SeekFrom, Write};
+#[cfg(not(target_arch = "wasm32"))]
+use std::os::unix::io::FromRawFd;
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use nix::unistd::Pid;
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pid(pub i32);
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use nix::sys::signal::Signal;
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Signal {
+    SIGTRAP,
+    SIGSEGV,
+    SIGILL,
+    SIGFPE,
+    SIGKILL,
+    SIGSTOP,
+}
 
 pub const CODE_BASE: usize = 0x1000_0000;
 pub const DATA_BASE: usize = 0x2000_0000;
@@ -34,6 +60,57 @@ pub struct CpuRegisters {
     pub r13: u64,
     pub r14: u64,
     pub r15: u64,
+}
+
+impl CpuRegisters {
+    pub fn get_by_name(&self, name: &str) -> Option<u64> {
+        match name {
+            "rax" => Some(self.rax),
+            "rbx" => Some(self.rbx),
+            "rcx" => Some(self.rcx),
+            "rdx" => Some(self.rdx),
+            "rsi" => Some(self.rsi),
+            "rdi" => Some(self.rdi),
+            "rbp" => Some(self.rbp),
+            "rsp" => Some(self.rsp),
+            "rip" => Some(self.rip),
+            "rflags" => Some(self.rflags),
+            "r8" => Some(self.r8),
+            "r9" => Some(self.r9),
+            "r10" => Some(self.r10),
+            "r11" => Some(self.r11),
+            "r12" => Some(self.r12),
+            "r13" => Some(self.r13),
+            "r14" => Some(self.r14),
+            "r15" => Some(self.r15),
+            _ => None,
+        }
+    }
+
+    pub fn set_by_name(&mut self, name: &str, val: u64) -> bool {
+        match name {
+            "rax" => self.rax = val,
+            "rbx" => self.rbx = val,
+            "rcx" => self.rcx = val,
+            "rdx" => self.rdx = val,
+            "rsi" => self.rsi = val,
+            "rdi" => self.rdi = val,
+            "rbp" => self.rbp = val,
+            "rsp" => self.rsp = val,
+            "rip" => self.rip = val,
+            "rflags" => self.rflags = val,
+            "r8" => self.r8 = val,
+            "r9" => self.r9 = val,
+            "r10" => self.r10 = val,
+            "r11" => self.r11 = val,
+            "r12" => self.r12 = val,
+            "r13" => self.r13 = val,
+            "r14" => self.r14 = val,
+            "r15" => self.r15 = val,
+            _ => return false,
+        }
+        true
+    }
 }
 
 pub enum DebuggerCommand {
@@ -75,6 +152,11 @@ pub enum DebuggerEvent {
     Stdout(String),
     Stderr(String),
     Error(String),
+    #[allow(dead_code)]
+    FileLoaded {
+        filename: String,
+        content: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,6 +169,7 @@ pub enum WaitResult {
 
 /// Sets up the page mappings in the parent process using `mmap`.
 /// These are inherited as Copy-on-Write by the child.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn setup_parent_mappings() -> Result<(), String> {
     unsafe {
         // Map Code Segment
@@ -96,7 +179,7 @@ pub fn setup_parent_mappings() -> Result<(), String> {
             libc::PROT_READ | libc::PROT_WRITE | libc::PROT_EXEC,
             libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED,
             -1,
-            0
+            0,
         );
         if code_ptr == libc::MAP_FAILED {
             return Err("Failed to map Code segment".to_string());
@@ -109,7 +192,7 @@ pub fn setup_parent_mappings() -> Result<(), String> {
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED,
             -1,
-            0
+            0,
         );
         if data_ptr == libc::MAP_FAILED {
             return Err("Failed to map Data segment".to_string());
@@ -122,7 +205,7 @@ pub fn setup_parent_mappings() -> Result<(), String> {
             libc::PROT_READ | libc::PROT_WRITE,
             libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED,
             -1,
-            0
+            0,
         );
         if stack_ptr == libc::MAP_FAILED {
             return Err("Failed to map Stack segment".to_string());
@@ -131,7 +214,13 @@ pub fn setup_parent_mappings() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn setup_parent_mappings() -> Result<(), String> {
+    Ok(())
+}
+
 /// Reads memory of the child process.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn read_child_mem(pid: Pid, address: usize, len: usize) -> std::io::Result<Vec<u8>> {
     let mut segment_end = None;
     if (CODE_BASE..CODE_BASE + 0x10_0000).contains(&address) {
@@ -162,7 +251,13 @@ pub fn read_child_mem(pid: Pid, address: usize, len: usize) -> std::io::Result<V
     Ok(buf)
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn read_child_mem(_pid: Pid, _address: usize, len: usize) -> std::io::Result<Vec<u8>> {
+    Ok(vec![0; len])
+}
+
 /// Writes memory of the child process.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn write_child_mem(pid: Pid, address: usize, bytes: &[u8]) -> std::io::Result<()> {
     let path = format!("/proc/{}/mem", pid);
     let mut file = OpenOptions::new().write(true).open(path)?;
@@ -171,7 +266,13 @@ pub fn write_child_mem(pid: Pid, address: usize, bytes: &[u8]) -> std::io::Resul
     Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn write_child_mem(_pid: Pid, _address: usize, _bytes: &[u8]) -> std::io::Result<()> {
+    Ok(())
+}
+
 /// Reads the child's registers.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn get_child_regs(pid: Pid) -> Result<CpuRegisters, String> {
     let regs = ptrace::getregs(pid).map_err(|e| format!("Failed to get registers: {}", e))?;
     Ok(CpuRegisters {
@@ -196,7 +297,13 @@ pub fn get_child_regs(pid: Pid) -> Result<CpuRegisters, String> {
     })
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn get_child_regs(_pid: Pid) -> Result<CpuRegisters, String> {
+    Ok(CpuRegisters::default())
+}
+
 /// Writes the child's registers.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn set_child_regs(pid: Pid, cpu_regs: CpuRegisters) -> Result<(), String> {
     let mut regs = ptrace::getregs(pid).map_err(|e| format!("Failed to get registers: {}", e))?;
     regs.rax = cpu_regs.rax;
@@ -221,7 +328,13 @@ pub fn set_child_regs(pid: Pid, cpu_regs: CpuRegisters) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn set_child_regs(_pid: Pid, _cpu_regs: CpuRegisters) -> Result<(), String> {
+    Ok(())
+}
+
 /// Spawns a background thread to read from a redirected pipe descriptor.
+#[cfg(not(target_arch = "wasm32"))]
 fn spawn_pipe_reader(fd: std::os::unix::io::RawFd, tx: Sender<DebuggerEvent>, is_stderr: bool) {
     thread::spawn(move || {
         let mut file = unsafe { File::from_raw_fd(fd) };
@@ -244,6 +357,7 @@ fn spawn_pipe_reader(fd: std::os::unix::io::RawFd, tx: Sender<DebuggerEvent>, is
 }
 
 /// Main debugger thread execution loop.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEvent>) {
     let mut child_pid: Option<Pid> = None;
     let mut breakpoints: HashMap<usize, u8> = HashMap::new(); // Address -> Original Byte
@@ -262,7 +376,12 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
 
     while let Ok(cmd) = rx.recv() {
         match cmd {
-            DebuggerCommand::Start { code, initial_regs, memory_patches, breakpoints: initial_bps } => {
+            DebuggerCommand::Start {
+                code,
+                initial_regs,
+                memory_patches,
+                breakpoints: initial_bps,
+            } => {
                 // Clean up previous child
                 if let Some(pid) = child_pid {
                     let _ = nix::sys::signal::kill(pid, Signal::SIGKILL);
@@ -318,7 +437,10 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                             Ok(WaitStatus::Stopped(_, Signal::SIGSTOP)) => {
                                 // Write compiled code into child space
                                 if let Err(e) = write_child_mem(child, CODE_BASE, &full_code) {
-                                    let _ = tx.send(DebuggerEvent::Error(format!("Memory write failed: {}", e)));
+                                    let _ = tx.send(DebuggerEvent::Error(format!(
+                                        "Memory write failed: {}",
+                                        e
+                                    )));
                                     let _ = nix::sys::signal::kill(child, Signal::SIGKILL);
                                     let _ = waitpid(child, None);
                                     child_pid = None;
@@ -328,7 +450,10 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                                 // Apply memory patches
                                 for (addr, val) in memory_patches {
                                     if let Err(e) = write_child_mem(child, addr, &[val]) {
-                                        let _ = tx.send(DebuggerEvent::Error(format!("Initial memory patch failed: {}", e)));
+                                        let _ = tx.send(DebuggerEvent::Error(format!(
+                                            "Initial memory patch failed: {}",
+                                            e
+                                        )));
                                     }
                                 }
 
@@ -340,7 +465,10 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                                 regs.rip = CODE_BASE as u64;
                                 regs.rsp = (STACK_BASE + STACK_SIZE - 8) as u64; // Set initial stack pointer
                                 if let Err(e) = set_child_regs(child, regs) {
-                                    let _ = tx.send(DebuggerEvent::Error(format!("Register write failed: {}", e)));
+                                    let _ = tx.send(DebuggerEvent::Error(format!(
+                                        "Register write failed: {}",
+                                        e
+                                    )));
                                     let _ = nix::sys::signal::kill(child, Signal::SIGKILL);
                                     let _ = waitpid(child, None);
                                     child_pid = None;
@@ -351,16 +479,29 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
 
                                 // Resume child execution immediately so there is no automatic breakpoint on the first instruction!
                                 if let Err(e) = ptrace::cont(child, None) {
-                                    let _ = tx.send(DebuggerEvent::Error(format!("Failed to continue execution: {}", e)));
+                                    let _ = tx.send(DebuggerEvent::Error(format!(
+                                        "Failed to continue execution: {}",
+                                        e
+                                    )));
                                     let _ = nix::sys::signal::kill(child, Signal::SIGKILL);
                                     let _ = waitpid(child, None);
                                     child_pid = None;
                                     continue;
                                 }
-                                wait_and_handle(child, &tx, &mut breakpoints, &mut last_breakpoint_addr, user_code_len, &rx);
+                                wait_and_handle(
+                                    child,
+                                    &tx,
+                                    &mut breakpoints,
+                                    &mut last_breakpoint_addr,
+                                    user_code_len,
+                                    &rx,
+                                );
                             }
                             other => {
-                                let _ = tx.send(DebuggerEvent::Error(format!("Unexpected child startup state: {:?}", other)));
+                                let _ = tx.send(DebuggerEvent::Error(format!(
+                                    "Unexpected child startup state: {:?}",
+                                    other
+                                )));
                                 let _ = nix::sys::signal::kill(child, Signal::SIGKILL);
                                 let _ = waitpid(child, None);
                                 child_pid = None;
@@ -381,13 +522,21 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                             let _ = write_child_mem(pid, bp_addr, &[orig_byte]);
                         }
                         if let Err(e) = ptrace::step(pid, None) {
-                            let _ = tx.send(DebuggerEvent::Error(format!("Step-over failed: {}", e)));
+                            let _ =
+                                tx.send(DebuggerEvent::Error(format!("Step-over failed: {}", e)));
                             continue;
                         }
-                        let wait_res = wait_and_handle(pid, &tx, &mut breakpoints, &mut last_breakpoint_addr, user_code_len, &rx);
+                        let wait_res = wait_and_handle(
+                            pid,
+                            &tx,
+                            &mut breakpoints,
+                            &mut last_breakpoint_addr,
+                            user_code_len,
+                            &rx,
+                        );
                         // Re-write breakpoint INT3 byte
                         let _ = write_child_mem(pid, bp_addr, &[0xCC]);
-                        
+
                         if wait_res == WaitResult::StoppedSignal {
                             last_breakpoint_addr = None;
                         }
@@ -399,7 +548,14 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                         let _ = tx.send(DebuggerEvent::Error(format!("Step failed: {}", e)));
                         continue;
                     }
-                    let wait_res = wait_and_handle(pid, &tx, &mut breakpoints, &mut last_breakpoint_addr, user_code_len, &rx);
+                    let wait_res = wait_and_handle(
+                        pid,
+                        &tx,
+                        &mut breakpoints,
+                        &mut last_breakpoint_addr,
+                        user_code_len,
+                        &rx,
+                    );
                     if wait_res == WaitResult::StoppedSignal {
                         last_breakpoint_addr = None;
                     }
@@ -413,13 +569,23 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
                             let _ = write_child_mem(pid, bp_addr, &[orig_byte]);
                         }
                         if let Err(e) = ptrace::step(pid, None) {
-                            let _ = tx.send(DebuggerEvent::Error(format!("Step-over continue failed: {}", e)));
+                            let _ = tx.send(DebuggerEvent::Error(format!(
+                                "Step-over continue failed: {}",
+                                e
+                            )));
                             continue;
                         }
-                        let wait_res = wait_and_handle(pid, &tx, &mut breakpoints, &mut last_breakpoint_addr, user_code_len, &rx);
+                        let wait_res = wait_and_handle(
+                            pid,
+                            &tx,
+                            &mut breakpoints,
+                            &mut last_breakpoint_addr,
+                            user_code_len,
+                            &rx,
+                        );
                         // Put INT3 back
                         let _ = write_child_mem(pid, bp_addr, &[0xCC]);
-                        
+
                         match wait_res {
                             WaitResult::StoppedSignal => {
                                 last_breakpoint_addr = None;
@@ -435,24 +601,38 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
 
                     if should_continue {
                         if let Err(e) = ptrace::cont(pid, None) {
-                            let _ = tx.send(DebuggerEvent::Error(format!("Continue failed: {}", e)));
+                            let _ =
+                                tx.send(DebuggerEvent::Error(format!("Continue failed: {}", e)));
                             continue;
                         }
-                        let _wait_res = wait_and_handle(pid, &tx, &mut breakpoints, &mut last_breakpoint_addr, user_code_len, &rx);
+                        let _wait_res = wait_and_handle(
+                            pid,
+                            &tx,
+                            &mut breakpoints,
+                            &mut last_breakpoint_addr,
+                            user_code_len,
+                            &rx,
+                        );
                     }
                 }
             }
             DebuggerCommand::WriteRegs(regs) => {
                 if let Some(pid) = child_pid {
                     if let Err(e) = set_child_regs(pid, regs) {
-                        let _ = tx.send(DebuggerEvent::Error(format!("Failed to write registers: {}", e)));
+                        let _ = tx.send(DebuggerEvent::Error(format!(
+                            "Failed to write registers: {}",
+                            e
+                        )));
                     }
                 }
             }
             DebuggerCommand::WriteMemory(addr, data) => {
                 if let Some(pid) = child_pid {
                     if let Err(e) = write_child_mem(pid, addr, &data) {
-                        let _ = tx.send(DebuggerEvent::Error(format!("Failed to write memory: {}", e)));
+                        let _ = tx.send(DebuggerEvent::Error(format!(
+                            "Failed to write memory: {}",
+                            e
+                        )));
                     }
                 }
             }
@@ -493,6 +673,7 @@ pub fn run_debugger_thread(rx: Receiver<DebuggerCommand>, tx: Sender<DebuggerEve
 }
 
 /// Waits for a child state change and reports it to the GUI.
+#[cfg(not(target_arch = "wasm32"))]
 fn wait_and_handle(
     pid: Pid,
     tx: &Sender<DebuggerEvent>,
@@ -541,7 +722,10 @@ fn wait_and_handle(
                 let mut regs = match get_child_regs(pid) {
                     Ok(r) => r,
                     Err(e) => {
-                        let _ = tx.send(DebuggerEvent::Error(format!("Failed to read registers: {}", e)));
+                        let _ = tx.send(DebuggerEvent::Error(format!(
+                            "Failed to read registers: {}",
+                            e
+                        )));
                         return WaitResult::Exited;
                     }
                 };
@@ -551,7 +735,7 @@ fn wait_and_handle(
 
                 if sig == Signal::SIGTRAP {
                     let possible_bp = (regs.rip - 1) as usize;
-                    
+
                     // Case 1: Hit safety exit loop trap
                     if possible_bp == CODE_BASE + user_code_len {
                         regs.rip = possible_bp as u64;
@@ -567,18 +751,21 @@ fn wait_and_handle(
                     if breakpoints.contains_key(&possible_bp) {
                         regs.rip = possible_bp as u64;
                         let _ = set_child_regs(pid, regs);
-                        
+
                         trap_addr = Some(possible_bp);
                         *last_breakpoint_addr = Some(possible_bp);
                         status_message = format!("Breakpoint hit at 0x{:08X}", possible_bp);
                         is_bp = true;
                     }
                 } else if sig == Signal::SIGSEGV {
-                    status_message = format!("Segmentation fault (SIGSEGV) at RIP: 0x{:08X}", regs.rip);
+                    status_message =
+                        format!("Segmentation fault (SIGSEGV) at RIP: 0x{:08X}", regs.rip);
                 } else if sig == Signal::SIGILL {
-                    status_message = format!("Illegal instruction (SIGILL) at RIP: 0x{:08X}", regs.rip);
+                    status_message =
+                        format!("Illegal instruction (SIGILL) at RIP: 0x{:08X}", regs.rip);
                 } else if sig == Signal::SIGFPE {
-                    status_message = format!("Arithmetic exception (SIGFPE) at RIP: 0x{:08X}", regs.rip);
+                    status_message =
+                        format!("Arithmetic exception (SIGFPE) at RIP: 0x{:08X}", regs.rip);
                 }
 
                 let _ = tx.send(DebuggerEvent::Stopped {
@@ -587,7 +774,7 @@ fn wait_and_handle(
                     trap_addr,
                     status_message,
                 });
-                
+
                 if is_bp {
                     return WaitResult::BreakpointHit(trap_addr.unwrap());
                 } else {
@@ -609,14 +796,22 @@ fn wait_and_handle(
                 return WaitResult::Exited;
             }
             other => {
-                let _ = tx.send(DebuggerEvent::Error(format!("Unknown wait status: {:?}", other)));
+                let _ = tx.send(DebuggerEvent::Error(format!(
+                    "Unknown wait status: {:?}",
+                    other
+                )));
                 return WaitResult::Exited;
             }
         }
     }
 }
 
-#[cfg(test)]
+#[cfg(target_arch = "wasm32")]
+pub fn run_debugger_thread(_rx: Receiver<DebuggerCommand>, _tx: Sender<DebuggerEvent>) {
+    // no-op stub on WASM targets
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 
@@ -639,12 +834,14 @@ mod tests {
         let code = vec![0x48, 0xC7, 0xC0, 0x2A, 0x00, 0x00, 0x00, 0x90];
 
         // Start child with a breakpoint at CODE_BASE
-        cmd_tx.send(DebuggerCommand::Start {
-            code,
-            initial_regs: CpuRegisters::default(),
-            memory_patches: vec![],
-            breakpoints: vec![CODE_BASE],
-        }).unwrap();
+        cmd_tx
+            .send(DebuggerCommand::Start {
+                code,
+                initial_regs: CpuRegisters::default(),
+                memory_patches: vec![],
+                breakpoints: vec![CODE_BASE],
+            })
+            .unwrap();
 
         // Expect Started event
         match evt_rx.recv().unwrap() {
@@ -698,12 +895,14 @@ mod tests {
 
         let code = vec![0x90];
 
-        cmd_tx.send(DebuggerCommand::Start {
-            code,
-            initial_regs: CpuRegisters::default(),
-            memory_patches: vec![],
-            breakpoints: vec![CODE_BASE],
-        }).unwrap();
+        cmd_tx
+            .send(DebuggerCommand::Start {
+                code,
+                initial_regs: CpuRegisters::default(),
+                memory_patches: vec![],
+                breakpoints: vec![CODE_BASE],
+            })
+            .unwrap();
 
         let pid = match evt_rx.recv().unwrap() {
             DebuggerEvent::Started { pid, .. } => pid,
@@ -733,4 +932,3 @@ mod tests {
         let _ = handle.join();
     }
 }
-

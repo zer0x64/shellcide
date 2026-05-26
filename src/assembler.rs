@@ -1,5 +1,5 @@
-use asm_rs::{Assembler, Arch, Syntax};
 use crate::app::TargetArch;
+use asm_rs::{Arch, Assembler, Syntax};
 
 fn strip_comments(code: &str) -> String {
     let mut clean_lines = Vec::new();
@@ -33,7 +33,12 @@ fn strip_comments(code: &str) -> String {
 /// * `code` - The assembly source code string.
 /// * `base_address` - The base address where the code will be loaded in memory.
 /// * `att_syntax` - If true, uses AT&T syntax. Otherwise, uses Intel syntax.
-pub fn assemble(code: &str, base_address: u64, att_syntax: bool, arch: TargetArch) -> Result<Vec<u8>, String> {
+pub fn assemble(
+    code: &str,
+    base_address: u64,
+    att_syntax: bool,
+    arch: TargetArch,
+) -> Result<Vec<u8>, String> {
     // Strip comments to prevent assembler parsing errors
     let clean_code = strip_comments(code);
 
@@ -57,10 +62,12 @@ pub fn assemble(code: &str, base_address: u64, att_syntax: bool, arch: TargetArc
 
     assembler.base_address(base_address);
 
-    assembler.emit(&clean_code)
+    assembler
+        .emit(&clean_code)
         .map_err(|e| format!("Assembly failed: {}", e))?;
 
-    let result = assembler.finish()
+    let result = assembler
+        .finish()
         .map_err(|e| format!("Assembly compilation failed: {}", e))?;
 
     Ok(result.bytes().to_vec())
@@ -99,16 +106,16 @@ _start:
 /// Supports space/comma/newline separation, hex prefixes/escapes, hex pairs, ranges, and decimal fallback.
 pub fn parse_bad_characters(input: &str) -> std::collections::HashSet<u8> {
     let mut bad_chars = std::collections::HashSet::new();
-    
+
     // Split input by whitespace, commas, semicolons, or newlines
     let tokens = input.split(&[' ', ',', ';', '\n', '\r', '\t']);
-    
+
     for token in tokens {
         let token = token.trim();
         if token.is_empty() {
             continue;
         }
-        
+
         // Handle ranges: e.g. "00-1f"
         if token.contains('-') {
             let parts: Vec<&str> = token.split('-').collect();
@@ -129,7 +136,7 @@ pub fn parse_bad_characters(input: &str) -> std::collections::HashSet<u8> {
             }
         }
     }
-    
+
     bad_chars
 }
 
@@ -138,31 +145,35 @@ fn parse_single_byte(s: &str) -> Option<u8> {
     if s.is_empty() {
         return None;
     }
-    
+
     let lowercase_s = s.to_lowercase();
-    
+
     // Check if it has a prefix
-    let (cleaned, is_explicit_hex) = if lowercase_s.starts_with("\\x") || lowercase_s.starts_with("0x") {
-        (&s[2..], true)
-    } else {
-        (s, false)
-    };
-    
+    let (cleaned, is_explicit_hex) =
+        if lowercase_s.starts_with("\\x") || lowercase_s.starts_with("0x") {
+            (&s[2..], true)
+        } else {
+            (s, false)
+        };
+
     let has_hex_chars = cleaned.chars().any(|c| {
         let lc = c.to_ascii_lowercase();
         c.is_ascii_alphabetic() && ('a'..='f').contains(&lc)
     });
     let is_hex_pair = cleaned.len() == 2;
-    
+
     if is_explicit_hex || has_hex_chars || is_hex_pair {
         // Try parsing as hex
         if let Ok(b) = u8::from_str_radix(cleaned, 16) {
             return Some(b);
         }
     }
-    
+
     // Fallback: try parsing as decimal, then try as hex if decimal fails
-    cleaned.parse::<u8>().ok().or_else(|| u8::from_str_radix(cleaned, 16).ok())
+    cleaned
+        .parse::<u8>()
+        .ok()
+        .or_else(|| u8::from_str_radix(cleaned, 16).ok())
 }
 
 #[cfg(test)]
@@ -215,7 +226,7 @@ mod tests {
         assert!(!res.contains(&1));
         assert!(!res.contains(&143));
         assert!(!res.contains(&150));
-        
+
         let ranges = parse_bad_characters("a-f");
         assert!(ranges.contains(&10));
         assert!(ranges.contains(&15));
@@ -229,4 +240,3 @@ mod tests {
         assert!(res.is_ok(), "Compilation failed: {:?}", res.err());
     }
 }
-

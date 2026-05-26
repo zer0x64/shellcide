@@ -1,11 +1,11 @@
-pub mod theme;
-pub mod editor;
-pub mod registers;
-pub mod memory;
-pub mod syscalls;
 pub mod controls;
+pub mod editor;
 pub mod header;
+pub mod memory;
+pub mod registers;
 pub mod struct_packer;
+pub mod syscalls;
+pub mod theme;
 
 #[cfg(test)]
 mod tests;
@@ -21,8 +21,9 @@ pub(crate) fn parse_u64_input(input: &str) -> Option<u64> {
     } else if lowercase.ends_with('h') {
         u64::from_str_radix(&clean[..clean.len() - 1], 16).ok()
     } else {
-        clean.parse::<u64>().ok().or_else(|| u64::from_str_radix(clean, 16).ok())
+        clean
+            .parse::<u64>()
+            .ok()
+            .or_else(|| u64::from_str_radix(clean, 16).ok())
     }
 }
-
-

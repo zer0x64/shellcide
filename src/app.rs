@@ -1,11 +1,10 @@
-use std::collections::{HashSet, HashMap};
-use std::sync::{Arc, Mutex};
-use flume::{Receiver, Sender};
 use eframe::egui;
-use nix::unistd::Pid;
+use flume::{Receiver, Sender};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
-use crate::debugger::{CpuRegisters, DebuggerCommand, DebuggerEvent, CODE_BASE, DATA_BASE};
 use crate::assembler::assemble;
+use crate::debugger::{CpuRegisters, DebuggerCommand, DebuggerEvent, Pid, CODE_BASE, DATA_BASE};
 use crate::disassembler::{disassemble_code, DisassembledInstruction};
 use crate::ui::struct_packer::{LeftBottomTab, StructPackerState};
 
@@ -20,7 +19,6 @@ pub enum TargetArch {
     Riscv,
 }
 
-
 pub struct ShellcideApp {
     // Code input and settings
     pub(crate) code_input: String,
@@ -30,6 +28,8 @@ pub struct ShellcideApp {
 
     // Thread communication
     pub(crate) cmd_tx: Sender<DebuggerCommand>,
+    #[allow(dead_code)]
+    pub(crate) event_tx: Sender<DebuggerEvent>,
     pub(crate) event_rx: Receiver<DebuggerEvent>,
     pub(crate) shared_pid: Arc<Mutex<Option<Pid>>>,
 
@@ -78,10 +78,22 @@ pub(crate) enum ConsoleTab {
     Shellcode,
 }
 
+fn format_hex_escapes(bytes: &[u8], chunk_size: usize, line_prefix: &str) -> String {
+    let mut out = String::new();
+    for (i, &b) in bytes.iter().enumerate() {
+        if i > 0 && i % chunk_size == 0 {
+            out.push_str(line_prefix);
+        }
+        out.push_str(&format!("\\x{:02x}", b));
+    }
+    out
+}
+
 impl ShellcideApp {
     pub fn new(
         _cc: &eframe::CreationContext<'_>,
         cmd_tx: Sender<DebuggerCommand>,
+        event_tx: Sender<DebuggerEvent>,
         event_rx: Receiver<DebuggerEvent>,
         shared_pid: Arc<Mutex<Option<Pid>>>,
     ) -> Self {
@@ -95,6 +107,7 @@ impl ShellcideApp {
             target_arch: TargetArch::X86_64,
             active_path: "demo.s".to_string(),
             cmd_tx,
+            event_tx,
             event_rx,
             shared_pid,
             is_running: false,
@@ -181,7 +194,11 @@ impl ShellcideApp {
         self.editor_breakpoints.clear();
         let inst_to_line = self.get_inst_to_line_mapping();
         for &addr in &self.breakpoints {
-            if let Some(inst_idx) = self.disassembly.iter().position(|inst| inst.address as usize == addr) {
+            if let Some(inst_idx) = self
+                .disassembly
+                .iter()
+                .position(|inst| inst.address as usize == addr)
+            {
                 if let Some(&line_idx) = inst_to_line.get(&inst_idx) {
                     self.editor_breakpoints.insert(line_idx);
                 }
@@ -192,10 +209,18 @@ impl ShellcideApp {
     pub(crate) fn do_assemble(&mut self) {
         self.bad_char_lines.clear();
         self.log("[+] Assembling shellcode...");
-        match assemble(&self.code_input, CODE_BASE as u64, self.att_syntax, self.target_arch) {
+        match assemble(
+            &self.code_input,
+            CODE_BASE as u64,
+            self.att_syntax,
+            self.target_arch,
+        ) {
             Ok(bytes) => {
-                self.log(&format!("[✓] Shellcode compiled successfully. Size: {} bytes.", bytes.len()));
-                
+                self.log(&format!(
+                    "[✓] Shellcode compiled successfully. Size: {} bytes.",
+                    bytes.len()
+                ));
+
                 let bad_chars = crate::assembler::parse_bad_characters(&self.bad_chars_input);
                 if !bad_chars.is_empty() {
                     let mut found_bad_bytes = Vec::new();
@@ -215,8 +240,9 @@ impl ShellcideApp {
                 }
 
                 self.compiled_bytes = bytes.clone();
-                self.disassembly = disassemble_code(&bytes, CODE_BASE as u64, self.att_syntax, self.target_arch);
-                
+                self.disassembly =
+                    disassemble_code(&bytes, CODE_BASE as u64, self.att_syntax, self.target_arch);
+
                 // Calculate which lines contain bad characters
                 if !bad_chars.is_empty() {
                     let inst_to_line = self.get_inst_to_line_mapping();
@@ -267,39 +293,31 @@ impl ShellcideApp {
         (self.regs.rsp as usize).saturating_sub(0x80) & !0xF
     }
 
-
     pub(crate) fn format_raw_hex(&self) -> String {
-        self.compiled_bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>()
+        self.compiled_bytes
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>()
     }
 
     pub(crate) fn format_python(&self) -> String {
         if self.compiled_bytes.is_empty() {
             return "shellcode = b\"\"".to_string();
         }
-        let mut out = "shellcode = b\"\"\nshellcode += b\"".to_string();
-        for (i, &b) in self.compiled_bytes.iter().enumerate() {
-            if i > 0 && i % 16 == 0 {
-                out.push_str("\"\nshellcode += b\"");
-            }
-            out.push_str(&format!("\\x{:02x}", b));
-        }
-        out.push('"');
-        out
+        format!(
+            "shellcode = b\"\"\nshellcode += b\"{}\"",
+            format_hex_escapes(&self.compiled_bytes, 16, "\"\nshellcode += b\"")
+        )
     }
 
     pub(crate) fn format_c(&self) -> String {
         if self.compiled_bytes.is_empty() {
             return "unsigned char shellcode[] = \"\";".to_string();
         }
-        let mut out = "unsigned char shellcode[] = \n\"".to_string();
-        for (i, &b) in self.compiled_bytes.iter().enumerate() {
-            if i > 0 && i % 16 == 0 {
-                out.push_str("\"\n\"");
-            }
-            out.push_str(&format!("\\x{:02x}", b));
-        }
-        out.push_str("\";");
-        out
+        format!(
+            "unsigned char shellcode[] = \n\"{}\";",
+            format_hex_escapes(&self.compiled_bytes, 16, "\"\n\"")
+        )
     }
 
     pub(crate) fn format_rust(&self) -> String {
@@ -307,11 +325,13 @@ impl ShellcideApp {
             return "const SHELLCODE: &[u8] = &[];".to_string();
         }
         let mut out = "const SHELLCODE: &[u8] = &[\n    ".to_string();
-        for (i, &b) in self.compiled_bytes.iter().enumerate() {
-            if i > 0 && i % 12 == 0 {
+        for (i, chunk) in self.compiled_bytes.chunks(12).enumerate() {
+            if i > 0 {
                 out.push_str("\n    ");
             }
-            out.push_str(&format!("0x{:02x}, ", b));
+            for &b in chunk {
+                out.push_str(&format!("0x{:02x}, ", b));
+            }
         }
         out.push_str("\n];");
         out
@@ -319,14 +339,17 @@ impl ShellcideApp {
 
     pub(crate) fn insert_into_editor(&mut self, ctx: &egui::Context, text: &str) {
         let text_edit_id = egui::Id::new("code_editor_text_edit");
-        let mut state = egui::widgets::text_edit::TextEditState::load(ctx, text_edit_id).unwrap_or_default();
+        let mut state =
+            egui::widgets::text_edit::TextEditState::load(ctx, text_edit_id).unwrap_or_default();
         let char_range = state.cursor.char_range();
-        
+
         let inserted_len = text.chars().count();
-        
+
         let (byte_idx, char_idx) = if let Some(range) = char_range {
             let cursor_idx = range.primary.index;
-            let byte_offset = self.code_input.char_indices()
+            let byte_offset = self
+                .code_input
+                .char_indices()
                 .nth(cursor_idx)
                 .map(|(i, _)| i)
                 .unwrap_or(self.code_input.len());
@@ -335,9 +358,9 @@ impl ShellcideApp {
             let total_chars = self.code_input.chars().count();
             (self.code_input.len(), total_chars)
         };
-        
+
         self.code_input.insert_str(byte_idx, text);
-        
+
         // Update cursor position to end of inserted text
         let new_char_idx = char_idx + inserted_len;
         let new_range = egui::text::CCursorRange::two(
@@ -348,26 +371,20 @@ impl ShellcideApp {
         state.store(ctx, text_edit_id);
     }
 
-    pub(crate) fn update_register_change_timestamps(&mut self, prev: CpuRegisters, next: CpuRegisters) {
+    pub(crate) fn update_register_change_timestamps(
+        &mut self,
+        prev: CpuRegisters,
+        next: CpuRegisters,
+    ) {
         let now = std::time::Instant::now();
-        if prev.rax != next.rax { self.reg_change_times.insert("rax".to_string(), now); }
-        if prev.rbx != next.rbx { self.reg_change_times.insert("rbx".to_string(), now); }
-        if prev.rcx != next.rcx { self.reg_change_times.insert("rcx".to_string(), now); }
-        if prev.rdx != next.rdx { self.reg_change_times.insert("rdx".to_string(), now); }
-        if prev.rsi != next.rsi { self.reg_change_times.insert("rsi".to_string(), now); }
-        if prev.rdi != next.rdi { self.reg_change_times.insert("rdi".to_string(), now); }
-        if prev.rbp != next.rbp { self.reg_change_times.insert("rbp".to_string(), now); }
-        if prev.rsp != next.rsp { self.reg_change_times.insert("rsp".to_string(), now); }
-        if prev.rip != next.rip { self.reg_change_times.insert("rip".to_string(), now); }
-        if prev.rflags != next.rflags { self.reg_change_times.insert("rflags".to_string(), now); }
-        if prev.r8 != next.r8 { self.reg_change_times.insert("r8".to_string(), now); }
-        if prev.r9 != next.r9 { self.reg_change_times.insert("r9".to_string(), now); }
-        if prev.r10 != next.r10 { self.reg_change_times.insert("r10".to_string(), now); }
-        if prev.r11 != next.r11 { self.reg_change_times.insert("r11".to_string(), now); }
-        if prev.r12 != next.r12 { self.reg_change_times.insert("r12".to_string(), now); }
-        if prev.r13 != next.r13 { self.reg_change_times.insert("r13".to_string(), now); }
-        if prev.r14 != next.r14 { self.reg_change_times.insert("r14".to_string(), now); }
-        if prev.r15 != next.r15 { self.reg_change_times.insert("r15".to_string(), now); }
+        for name in [
+            "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "rip", "rflags", "r8", "r9",
+            "r10", "r11", "r12", "r13", "r14", "r15",
+        ] {
+            if prev.get_by_name(name) != next.get_by_name(name) {
+                self.reg_change_times.insert(name.to_string(), now);
+            }
+        }
     }
 }
 
@@ -387,29 +404,50 @@ impl eframe::App for ShellcideApp {
                     self.log("[Debugger] Child process spawned and running.");
                     self.refresh_memory();
                 }
-                DebuggerEvent::Stopped { regs, signal, trap_addr, status_message } => {
+                DebuggerEvent::Stopped {
+                    regs,
+                    signal,
+                    trap_addr,
+                    status_message,
+                } => {
                     self.is_running = true;
                     self.is_stopped = true;
                     self.previous_regs = Some(self.regs);
                     let old_regs = self.regs;
                     self.regs = regs;
                     self.update_register_change_timestamps(old_regs, regs);
-                    let at_addr = trap_addr.map_or(String::new(), |addr| format!(" at 0x{:X}", addr));
-                    self.log(&format!("[Debugger] Process stopped (Signal: {:?}){}. {}", signal, at_addr, status_message));
+                    let at_addr =
+                        trap_addr.map_or(String::new(), |addr| format!(" at 0x{:X}", addr));
+                    self.log(&format!(
+                        "[Debugger] Process stopped (Signal: {:?}){}. {}",
+                        signal, at_addr, status_message
+                    ));
                     self.refresh_memory();
                 }
-                DebuggerEvent::Terminated { exit_code, status_message } => {
+                DebuggerEvent::Terminated {
+                    exit_code,
+                    status_message,
+                } => {
                     self.is_running = false;
                     self.is_stopped = false;
                     *self.shared_pid.lock().unwrap() = None;
-                    self.log(&format!("[Debugger] Process terminated with status code {}: {}", exit_code, status_message));
+                    self.log(&format!(
+                        "[Debugger] Process terminated with status code {}: {}",
+                        exit_code, status_message
+                    ));
                     self.refresh_memory();
                 }
-                DebuggerEvent::Signaled { signal, status_message } => {
+                DebuggerEvent::Signaled {
+                    signal,
+                    status_message,
+                } => {
                     self.is_running = false;
                     self.is_stopped = false;
                     *self.shared_pid.lock().unwrap() = None;
-                    self.log(&format!("[Debugger] Process killed by signal: {:?}. {}", signal, status_message));
+                    self.log(&format!(
+                        "[Debugger] Process killed by signal: {:?}. {}",
+                        signal, status_message
+                    ));
                     self.refresh_memory();
                 }
                 DebuggerEvent::Stdout(data) => {
@@ -420,6 +458,11 @@ impl eframe::App for ShellcideApp {
                 }
                 DebuggerEvent::Error(err) => {
                     self.log(&format!("[Debugger Error] {}", err));
+                }
+                DebuggerEvent::FileLoaded { filename, content } => {
+                    self.active_path = filename;
+                    self.code_input = content;
+                    self.log(&format!("[File] Loaded file: {}", self.active_path));
                 }
             }
         }
@@ -448,10 +491,18 @@ impl eframe::App for ShellcideApp {
             .show(ctx, |ui| {
                 crate::ui::editor::render_editor_panel(self, ui);
                 ui.separator();
-                
+
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.left_bottom_tab, LeftBottomTab::Syscalls, "Syscalls");
-                    ui.selectable_value(&mut self.left_bottom_tab, LeftBottomTab::StructPacker, "Struct Packer");
+                    ui.selectable_value(
+                        &mut self.left_bottom_tab,
+                        LeftBottomTab::Syscalls,
+                        "Syscalls",
+                    );
+                    ui.selectable_value(
+                        &mut self.left_bottom_tab,
+                        LeftBottomTab::StructPacker,
+                        "Struct Packer",
+                    );
                 });
                 ui.separator();
 
@@ -466,7 +517,7 @@ impl eframe::App for ShellcideApp {
             });
 
         // Right Panel (Registers & Memory)
-        if self.target_arch == TargetArch::X86_64 {
+        if !cfg!(target_arch = "wasm32") && self.target_arch == TargetArch::X86_64 {
             egui::SidePanel::right("right_panel")
                 .resizable(true)
                 .min_width(200.0)
@@ -494,7 +545,7 @@ impl eframe::App for ShellcideApp {
 impl ShellcideApp {
     pub(crate) fn dummy(bytes: Vec<u8>) -> Self {
         let (cmd_tx, _) = flume::unbounded();
-        let (_, event_rx) = flume::unbounded();
+        let (event_tx, event_rx) = flume::unbounded();
         let shared_pid = Arc::new(Mutex::new(None));
         Self {
             code_input: String::new(),
@@ -502,6 +553,7 @@ impl ShellcideApp {
             target_arch: TargetArch::X86_64,
             active_path: String::new(),
             cmd_tx,
+            event_tx,
             event_rx,
             shared_pid,
             is_running: false,
@@ -554,7 +606,10 @@ mod tests {
         assert_eq!(app_empty.format_python(), "shellcode = b\"\"");
 
         let app_short = dummy_app(vec![0x90, 0xcc]);
-        assert_eq!(app_short.format_python(), "shellcode = b\"\"\nshellcode += b\"\\x90\\xcc\"");
+        assert_eq!(
+            app_short.format_python(),
+            "shellcode = b\"\"\nshellcode += b\"\\x90\\xcc\""
+        );
 
         let app_long = dummy_app((0..20).collect());
         let expected = "shellcode = b\"\"\nshellcode += b\"\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\x09\\x0a\\x0b\\x0c\\x0d\\x0e\\x0f\"\nshellcode += b\"\\x10\\x11\\x12\\x13\"";
@@ -567,7 +622,10 @@ mod tests {
         assert_eq!(app_empty.format_c(), "unsigned char shellcode[] = \"\";");
 
         let app_short = dummy_app(vec![0x90, 0xcc]);
-        assert_eq!(app_short.format_c(), "unsigned char shellcode[] = \n\"\\x90\\xcc\";");
+        assert_eq!(
+            app_short.format_c(),
+            "unsigned char shellcode[] = \n\"\\x90\\xcc\";"
+        );
 
         let app_long = dummy_app((0..20).collect());
         let expected = "unsigned char shellcode[] = \n\"\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\x09\\x0a\\x0b\\x0c\\x0d\\x0e\\x0f\"\n\"\\x10\\x11\\x12\\x13\";";
@@ -580,7 +638,10 @@ mod tests {
         assert_eq!(app_empty.format_rust(), "const SHELLCODE: &[u8] = &[];");
 
         let app_short = dummy_app(vec![0x90, 0xcc]);
-        assert_eq!(app_short.format_rust(), "const SHELLCODE: &[u8] = &[\n    0x90, 0xcc, \n];");
+        assert_eq!(
+            app_short.format_rust(),
+            "const SHELLCODE: &[u8] = &[\n    0x90, 0xcc, \n];"
+        );
 
         let app_long = dummy_app((0..15).collect());
         let expected = "const SHELLCODE: &[u8] = &[\n    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, \n    0x0c, 0x0d, 0x0e, \n];";
@@ -605,9 +666,11 @@ mod tests {
         app.code_input = "nop".to_string();
         app.bad_chars_input = "90".to_string();
         app.do_assemble();
-        
+
         assert!(app.console_log.contains("compiled successfully"));
-        assert!(app.console_log.contains("[⚠️ WARNING] Found 1 bad character(s)"));
+        assert!(app
+            .console_log
+            .contains("[⚠️ WARNING] Found 1 bad character(s)"));
         assert!(app.console_log.contains("0x90 at 0x10000000"));
         assert!(app.bad_char_lines.contains(&0));
     }
@@ -647,5 +710,3 @@ mod tests {
         assert_eq!(app.mem_base_input, "0x7FFFFFFFDF80");
     }
 }
-
-

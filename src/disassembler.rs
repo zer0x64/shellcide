@@ -1,5 +1,5 @@
-use iced_x86::{Decoder, DecoderOptions, Formatter, IntelFormatter, GasFormatter};
 use crate::app::TargetArch;
+use iced_x86::{Decoder, DecoderOptions, Formatter, GasFormatter, IntelFormatter};
 
 #[derive(Debug, Clone)]
 pub struct DisassembledInstruction {
@@ -15,7 +15,12 @@ pub struct DisassembledInstruction {
 /// * `code` - Raw binary machine code.
 /// * `base_address` - The base instruction pointer address.
 /// * `att_syntax` - If true, uses AT&T syntax. If false, uses Intel syntax.
-pub fn disassemble_code(code: &[u8], base_address: u64, att_syntax: bool, arch: TargetArch) -> Vec<DisassembledInstruction> {
+pub fn disassemble_code(
+    code: &[u8],
+    base_address: u64,
+    att_syntax: bool,
+    arch: TargetArch,
+) -> Vec<DisassembledInstruction> {
     if code.is_empty() {
         return Vec::new();
     }
@@ -27,7 +32,7 @@ pub fn disassemble_code(code: &[u8], base_address: u64, att_syntax: bool, arch: 
     };
 
     let mut decoder = Decoder::with_ip(bitness, code, base_address, DecoderOptions::NONE);
-    
+
     let mut formatter: Box<dyn Formatter> = if att_syntax {
         let mut f = GasFormatter::new();
         f.options_mut().set_space_after_operand_separator(true);

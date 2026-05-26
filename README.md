@@ -19,7 +19,7 @@ This is very much a WIP, but in my opinion it's already better to use compared t
 - [x] Memory viewer/editor
 - [x] Bad characters detection and highlight
 - [x] Multi-langueage shellcode formatting (raw hex, python, C, Rust)
-- [ ] In-browser support using wasm
+- [x] In-browser support using wasm
 - [ ] Cross-platform support (Windows, macOS)
 - [ ] Cross-architecture debugging support (via emulation)
 - [ ] Native architecture debugger for non x86_64 architectures

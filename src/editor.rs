@@ -4,11 +4,48 @@ use eframe::egui;
 fn is_mnemonic(word: &str) -> bool {
     matches!(
         word,
-        "mov" | "add" | "sub" | "mul" | "imul" | "div" | "idiv" | "cmp" | "jmp" | 
-        "je" | "jne" | "jg" | "jge" | "jl" | "jle" | "jz" | "jnz" | "js" | "jns" | 
-        "jc" | "jnc" | "call" | "ret" | "push" | "pop" | "syscall" | "int" | "nop" | 
-        "leave" | "enter" | "inc" | "dec" | "xor" | "or" | "and" | "shl" | "shr" | 
-        "lea" | "db" | "dw" | "dd" | "dq"
+        "mov"
+            | "add"
+            | "sub"
+            | "mul"
+            | "imul"
+            | "div"
+            | "idiv"
+            | "cmp"
+            | "jmp"
+            | "je"
+            | "jne"
+            | "jg"
+            | "jge"
+            | "jl"
+            | "jle"
+            | "jz"
+            | "jnz"
+            | "js"
+            | "jns"
+            | "jc"
+            | "jnc"
+            | "call"
+            | "ret"
+            | "push"
+            | "pop"
+            | "syscall"
+            | "int"
+            | "nop"
+            | "leave"
+            | "enter"
+            | "inc"
+            | "dec"
+            | "xor"
+            | "or"
+            | "and"
+            | "shl"
+            | "shr"
+            | "lea"
+            | "db"
+            | "dw"
+            | "dd"
+            | "dq"
     )
 }
 
@@ -41,13 +78,19 @@ fn is_number(word: &str) -> bool {
     if word.starts_with(|c: char| c.is_ascii_digit()) {
         return true;
     }
-    if word.starts_with('-') && word.len() > 1 && word[1..].starts_with(|c: char| c.is_ascii_digit()) {
+    if word.starts_with('-')
+        && word.len() > 1
+        && word[1..].starts_with(|c: char| c.is_ascii_digit())
+    {
         return true;
     }
     if word.starts_with("0x") || word.starts_with("0b") {
         return true;
     }
-    if word.ends_with('h') && word.len() > 1 && word.starts_with(|c: char| c.is_ascii_alphanumeric()) {
+    if word.ends_with('h')
+        && word.len() > 1
+        && word.starts_with(|c: char| c.is_ascii_alphanumeric())
+    {
         return true;
     }
     false
@@ -61,7 +104,10 @@ struct SyntaxColors {
     directive: egui::Color32,
 }
 
-fn get_line_background(line_idx: usize, bad_char_lines: &std::collections::HashSet<usize>) -> egui::Color32 {
+fn get_line_background(
+    line_idx: usize,
+    bad_char_lines: &std::collections::HashSet<usize>,
+) -> egui::Color32 {
     if bad_char_lines.contains(&line_idx) {
         egui::Color32::from_rgba_unmultiplied(255, 118, 117, 30)
     } else {
@@ -122,14 +168,14 @@ pub fn highlight_assembly(
 
     // Cyber Cyan Color Palette
     let colors = SyntaxColors {
-        default: egui::Color32::from_rgb(223, 230, 233),   // Soft white/gray
-        mnemonic: egui::Color32::from_rgb(0, 206, 203),    // Cyber Cyan
-        register: egui::Color32::from_rgb(253, 121, 168),  // Neon Pink
-        number: egui::Color32::from_rgb(250, 177, 160),    // Soft Orange
-        directive: egui::Color32::from_rgb(116, 185, 255),  // Ice Blue
+        default: egui::Color32::from_rgb(223, 230, 233), // Soft white/gray
+        mnemonic: egui::Color32::from_rgb(0, 206, 203),  // Cyber Cyan
+        register: egui::Color32::from_rgb(253, 121, 168), // Neon Pink
+        number: egui::Color32::from_rgb(250, 177, 160),  // Soft Orange
+        directive: egui::Color32::from_rgb(116, 185, 255), // Ice Blue
     };
-    let color_comment = egui::Color32::from_rgb(99, 110, 114);    // Slate Gray (dimmed)
-    let color_label = egui::Color32::from_rgb(85, 239, 196);      // Toxic Green
+    let color_comment = egui::Color32::from_rgb(99, 110, 114); // Slate Gray (dimmed)
+    let color_label = egui::Color32::from_rgb(85, 239, 196); // Toxic Green
 
     let mut chars = code.chars().peekable();
     let mut current_token = String::new();
@@ -246,10 +292,10 @@ mod tests {
         let _ = ctx.run(Default::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
                 let job = highlight_assembly(ui, code, &bad_lines);
-                
+
                 let mut found_bad = false;
                 let mut found_good = false;
-                
+
                 for section in &job.sections {
                     let section_text = &job.text[section.byte_range.clone()];
                     if section_text.contains("mov") || section_text.contains("rax") {

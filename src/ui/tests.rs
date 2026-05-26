@@ -1,6 +1,6 @@
-use eframe::egui;
 use crate::app::{ShellcideApp, TargetArch};
 use crate::debugger::CODE_BASE;
+use eframe::egui;
 
 fn create_test_app(bytes: Vec<u8>) -> ShellcideApp {
     ShellcideApp::dummy(bytes)
@@ -59,12 +59,13 @@ fn test_controls_panel_render() {
     app.is_stopped = true;
 
     // Generate some dummy disassembly instruction
-    app.disassembly.push(crate::disassembler::DisassembledInstruction {
-        address: CODE_BASE as u64,
-        bytes: vec![0x90],
-        mnemonic: "nop".to_string(),
-        op_str: String::new(),
-    });
+    app.disassembly
+        .push(crate::disassembler::DisassembledInstruction {
+            address: CODE_BASE as u64,
+            bytes: vec![0x90],
+            mnemonic: "nop".to_string(),
+            op_str: String::new(),
+        });
 
     test_render(|ui| crate::ui::controls::render_controls_panel(&mut app, ui));
 }
@@ -104,12 +105,13 @@ fn test_controls_panel_hides_debug_buttons_non_native() {
     app.is_stopped = true;
 
     // Generate some dummy disassembly instruction
-    app.disassembly.push(crate::disassembler::DisassembledInstruction {
-        address: CODE_BASE as u64,
-        bytes: vec![0x90],
-        mnemonic: "nop".to_string(),
-        op_str: String::new(),
-    });
+    app.disassembly
+        .push(crate::disassembler::DisassembledInstruction {
+            address: CODE_BASE as u64,
+            bytes: vec![0x90],
+            mnemonic: "nop".to_string(),
+            op_str: String::new(),
+        });
 
     test_render(|ui| crate::ui::controls::render_controls_panel(&mut app, ui));
 

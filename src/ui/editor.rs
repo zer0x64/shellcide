@@ -1,12 +1,12 @@
-use eframe::egui::{self, Color32};
 use crate::app::{ShellcideApp, TargetArch};
 use crate::debugger::DebuggerCommand;
+use eframe::egui::{self, Color32};
 
 fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax: bool) -> String {
     let mut s = String::new();
     let comment_char = if att_syntax { "/* " } else { "; " };
     let comment_end = if att_syntax { " */" } else { "" };
-    
+
     // Add comment detailing the signature
     s.push_str(&format!("{}{}(", comment_char, info.entry_point));
     let args_str: Vec<&str> = info.args.iter().map(|arg| arg.arg_type).collect();
@@ -50,7 +50,13 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     if has_focus {
         ui.ctx().input_mut(|i| {
             i.events.retain(|event| {
-                if let egui::Event::Key { key: egui::Key::Tab, pressed: true, modifiers, .. } = event {
+                if let egui::Event::Key {
+                    key: egui::Key::Tab,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } = event
+                {
                     tab_pressed = true;
                     shift_pressed = modifiers.shift;
                     false // Consume (prevent default focus shift or raw tab insert)
@@ -62,14 +68,17 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     }
 
     if tab_pressed {
-        let mut state = egui::widgets::text_edit::TextEditState::load(ui.ctx(), text_edit_id).unwrap_or_default();
+        let mut state = egui::widgets::text_edit::TextEditState::load(ui.ctx(), text_edit_id)
+            .unwrap_or_default();
         if let Some(range) = state.cursor.char_range() {
             let start_char = range.primary.index.min(range.secondary.index);
             let end_char = range.primary.index.max(range.secondary.index);
 
             if start_char == end_char && !shift_pressed {
                 // Case A: Tab with no selection -> Insert 4 spaces at cursor
-                let byte_idx = app.code_input.char_indices()
+                let byte_idx = app
+                    .code_input
+                    .char_indices()
                     .nth(start_char)
                     .map(|(i, _)| i)
                     .unwrap_or(app.code_input.len());
@@ -196,8 +205,16 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
     let frame = if dnd_alpha > 0.0 {
         egui::Frame::group(ui.style())
-            .fill(Color32::from_rgba_unmultiplied(0, 206, 201, (dnd_alpha * 10.0) as u8))
-            .stroke(egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(0, 206, 201, (dnd_alpha * 255.0) as u8)))
+            .fill(Color32::from_rgba_unmultiplied(
+                0,
+                206,
+                201,
+                (dnd_alpha * 10.0) as u8,
+            ))
+            .stroke(egui::Stroke::new(
+                2.0,
+                Color32::from_rgba_unmultiplied(0, 206, 201, (dnd_alpha * 255.0) as u8),
+            ))
             .inner_margin(4.0)
     } else {
         egui::Frame::none()
@@ -212,96 +229,120 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         };
 
         let scroll_height = ui.available_height() - 200.0;
-        egui::ScrollArea::vertical().id_salt("editor_scroll").max_height(scroll_height).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                let row_height = ui.fonts(|f| f.row_height(&egui::FontId::monospace(14.0)));
-                let margin_top = 6.0; // Matches standard TextEdit top margin
-                
-                // Gutter column
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0; // 0.0 spacing to match text rows perfectly
-                    ui.add_space(margin_top);
-                    
-                    let lines_count = app.code_input.lines().count().max(1);
-                    let is_native = app.target_arch == TargetArch::X86_64;
-                    for i in 0..lines_count {
-                        let has_bp = app.editor_breakpoints.contains(&i);
-                        
-                        let (rect, response) = ui.allocate_exact_size(
-                            egui::vec2(60.0, row_height), 
-                            egui::Sense::click()
-                        );
-                        
-                        if is_native && response.clicked() {
-                            let line_to_inst = app.get_line_to_inst_mapping();
-                            let resolved_addr = line_to_inst.get(&i)
-                                .and_then(|&idx| app.disassembly.get(idx))
-                                .map(|inst| inst.address as usize);
+        egui::ScrollArea::vertical()
+            .id_salt("editor_scroll")
+            .max_height(scroll_height)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let row_height = ui.fonts(|f| f.row_height(&egui::FontId::monospace(14.0)));
+                    let margin_top = 6.0; // Matches standard TextEdit top margin
 
-                            let was_present = app.editor_breakpoints.contains(&i);
-                            if was_present {
-                                app.editor_breakpoints.remove(&i);
-                            } else {
-                                app.editor_breakpoints.insert(i);
-                            }
+                    // Gutter column
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0; // 0.0 spacing to match text rows perfectly
+                        ui.add_space(margin_top);
 
-                            let action = if was_present { "Removed" } else { "Added" };
-                            if let Some(addr) = resolved_addr {
+                        let lines_count = app.code_input.lines().count().max(1);
+                        let is_native =
+                            !cfg!(target_arch = "wasm32") && app.target_arch == TargetArch::X86_64;
+                        for i in 0..lines_count {
+                            let has_bp = app.editor_breakpoints.contains(&i);
+
+                            let (rect, response) = ui.allocate_exact_size(
+                                egui::vec2(60.0, row_height),
+                                egui::Sense::click(),
+                            );
+
+                            if is_native && response.clicked() {
+                                let line_to_inst = app.get_line_to_inst_mapping();
+                                let resolved_addr = line_to_inst
+                                    .get(&i)
+                                    .and_then(|&idx| app.disassembly.get(idx))
+                                    .map(|inst| inst.address as usize);
+
+                                let was_present = app.editor_breakpoints.contains(&i);
                                 if was_present {
-                                    app.breakpoints.remove(&addr);
+                                    app.editor_breakpoints.remove(&i);
                                 } else {
-                                    app.breakpoints.insert(addr);
+                                    app.editor_breakpoints.insert(i);
                                 }
-                                app.cmd_tx.send(DebuggerCommand::ToggleBreakpoint(addr, !was_present)).ok();
-                                app.log(&format!("[Breakpoint] {} at line {}, 0x{:08X}", action, i + 1, addr));
-                            } else {
-                                app.log(&format!("[Breakpoint] {} at line {}", action, i + 1));
+
+                                let action = if was_present { "Removed" } else { "Added" };
+                                if let Some(addr) = resolved_addr {
+                                    if was_present {
+                                        app.breakpoints.remove(&addr);
+                                    } else {
+                                        app.breakpoints.insert(addr);
+                                    }
+                                    app.cmd_tx
+                                        .send(DebuggerCommand::ToggleBreakpoint(addr, !was_present))
+                                        .ok();
+                                    app.log(&format!(
+                                        "[Breakpoint] {} at line {}, 0x{:08X}",
+                                        action,
+                                        i + 1,
+                                        addr
+                                    ));
+                                } else {
+                                    app.log(&format!("[Breakpoint] {} at line {}", action, i + 1));
+                                }
                             }
+
+                            let text_color = if is_native && has_bp {
+                                Color32::from_rgb(255, 118, 117)
+                            } else {
+                                Color32::from_rgb(99, 110, 114)
+                            };
+
+                            let bp_char = if is_native && has_bp { "● " } else { "  " };
+                            let warn_char = if app.bad_char_lines.contains(&i) {
+                                "⚠️ "
+                            } else {
+                                "  "
+                            };
+                            let label = format!("{}{}{:>2}", bp_char, warn_char, i + 1);
+
+                            ui.painter().text(
+                                rect.left_center(),
+                                egui::Align2::LEFT_CENTER,
+                                label,
+                                egui::FontId::monospace(12.0),
+                                text_color,
+                            );
                         }
-                        
-                        let text_color = if is_native && has_bp {
-                            Color32::from_rgb(255, 118, 117)
-                        } else {
-                            Color32::from_rgb(99, 110, 114)
-                        };
-                        
-                        let bp_char = if is_native && has_bp { "● " } else { "  " };
-                        let warn_char = if app.bad_char_lines.contains(&i) { "⚠️ " } else { "  " };
-                        let label = format!("{}{}{:>2}", bp_char, warn_char, i + 1);
-                        
-                        ui.painter().text(
-                            rect.left_center(),
-                            egui::Align2::LEFT_CENTER,
-                            label,
-                            egui::FontId::monospace(12.0),
-                            text_color
-                        );
-                    }
-                });
-                
-                // The TextEdit
-                egui::ScrollArea::horizontal().id_salt("editor_horiz_scroll").show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut app.code_input)
-                            .id(text_edit_id)
-                            .font(egui::FontId::monospace(14.0))
-                            .code_editor()
-                            .lock_focus(true)
-                            .desired_width(f32::INFINITY)
-                            .desired_rows(30)
-                            .layouter(&mut layouter)
-                    );
+                    });
+
+                    // The TextEdit
+                    egui::ScrollArea::horizontal()
+                        .id_salt("editor_horiz_scroll")
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut app.code_input)
+                                    .id(text_edit_id)
+                                    .font(egui::FontId::monospace(14.0))
+                                    .code_editor()
+                                    .lock_focus(true)
+                                    .desired_width(f32::INFINITY)
+                                    .desired_rows(30)
+                                    .layouter(&mut layouter),
+                            );
+                        });
                 });
             });
-        });
     });
 
     if let Some(payload) = dropped_payload {
         let syscall_name = &*payload;
-        if let Some(s) = crate::syscalls::SYSCALLS.iter().find(|s| s.name == syscall_name) {
+        if let Some(s) = crate::syscalls::SYSCALLS
+            .iter()
+            .find(|s| s.name == syscall_name)
+        {
             let boilerplate = generate_syscall_boilerplate(s, app.att_syntax);
             app.insert_into_editor(ui.ctx(), &boilerplate);
-            app.log(&format!("[Editor] Inserted boilerplate for syscall: {}", syscall_name));
+            app.log(&format!(
+                "[Editor] Inserted boilerplate for syscall: {}",
+                syscall_name
+            ));
         }
     }
 
@@ -312,13 +353,13 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             ui.add(
                 egui::TextEdit::singleline(&mut app.bad_chars_input)
                     .hint_text("e.g. 00 0a 0d 90-ff")
-                    .desired_width(180.0)
+                    .desired_width(180.0),
             );
             if ui.button("Clear").clicked() {
                 app.bad_chars_input.clear();
             }
         });
-        
+
         let bad_chars = crate::assembler::parse_bad_characters(&app.bad_chars_input);
         if !bad_chars.is_empty() {
             ui.horizontal_wrapped(|ui| {
@@ -327,7 +368,11 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 let mut sorted_chars: Vec<&u8> = bad_chars.iter().collect();
                 sorted_chars.sort();
                 for &b in sorted_chars {
-                    ui.label(egui::RichText::new(format!("{:02x}", b)).monospace().color(Color32::from_rgb(255, 118, 117)));
+                    ui.label(
+                        egui::RichText::new(format!("{:02x}", b))
+                            .monospace()
+                            .color(Color32::from_rgb(255, 118, 117)),
+                    );
                 }
             });
         } else {

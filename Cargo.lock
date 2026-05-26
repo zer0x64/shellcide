@@ -684,6 +684,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2769,11 +2779,17 @@ name = "shellcide"
 version = "0.1.0"
 dependencies = [
  "asm-rs",
+ "console_error_panic_hook",
  "eframe",
  "flume",
  "iced-x86",
+ "js-sys",
  "libc",
+ "log",
  "nix 0.27.1",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

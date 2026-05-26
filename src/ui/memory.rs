@@ -1,8 +1,12 @@
-use eframe::egui::{self, Color32};
 use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
+use eframe::egui::{self, Color32};
 
-fn highlight_stack_cell(mut label: egui::RichText, byte_addr: usize, app: &ShellcideApp) -> egui::RichText {
+fn highlight_stack_cell(
+    mut label: egui::RichText,
+    byte_addr: usize,
+    app: &ShellcideApp,
+) -> egui::RichText {
     if app.is_running && app.is_stopped {
         let rsp = app.regs.rsp as usize;
         let rbp = app.regs.rbp as usize;
@@ -24,10 +28,12 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
     // Base address configuration
     ui.horizontal(|ui| {
         ui.label("Segment Address:");
-        let text_edit = ui.add(egui::TextEdit::singleline(&mut app.mem_base_input).desired_width(120.0));
-        
+        let text_edit =
+            ui.add(egui::TextEdit::singleline(&mut app.mem_base_input).desired_width(120.0));
+
         if text_edit.lost_focus() || ui.button("Go").clicked() {
-            if let Some(addr) = crate::ui::parse_u64_input(&app.mem_base_input).map(|v| v as usize) {
+            if let Some(addr) = crate::ui::parse_u64_input(&app.mem_base_input).map(|v| v as usize)
+            {
                 app.memory_base_address = addr;
                 app.refresh_memory();
             } else {
@@ -64,7 +70,6 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             for r in 0..16 {
                 let row_offset = r * 16;
                 let row_addr = app.memory_base_address + row_offset;
-                
                 let mut suffix = String::new();
                 if app.is_running && app.is_stopped {
                     let rsp = app.regs.rsp as usize;
