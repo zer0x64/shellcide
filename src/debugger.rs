@@ -1009,7 +1009,10 @@ mod tests {
                 assert_eq!(signal, Signal::SIGTRAP);
                 assert_eq!(regs.rax, 42);
             }
-            other => panic!("Expected Stopped (SIGTRAP) after mov rax, 42, got {:?}", other),
+            other => panic!(
+                "Expected Stopped (SIGTRAP) after mov rax, 42, got {:?}",
+                other
+            ),
         }
 
         // Terminate
@@ -1092,7 +1095,10 @@ mod tests {
                 assert_eq!(signal, Signal::SIGTRAP);
                 assert_eq!(regs.rax, 42);
             }
-            other => panic!("Expected Stopped (SIGTRAP) after mov rax, 42, got {:?}", other),
+            other => panic!(
+                "Expected Stopped (SIGTRAP) after mov rax, 42, got {:?}",
+                other
+            ),
         }
 
         // Terminate
@@ -1106,5 +1112,3 @@ mod tests {
         let _ = handle.join();
     }
 }
-
-

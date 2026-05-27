@@ -1,6 +1,6 @@
 use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
-use crate::ui::theme::{CYBER_CYAN, NEON_PINK, LAUGHTER_PURPLE, SLATE_GRAY, ICE_BLUE};
+use crate::ui::theme::{CYBER_CYAN, ICE_BLUE, LAUGHTER_PURPLE, NEON_PINK, SLATE_GRAY};
 use eframe::egui::{self, Color32};
 
 fn with_alpha(color: Color32, alpha: u8) -> Color32 {

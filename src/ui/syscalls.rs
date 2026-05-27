@@ -49,7 +49,17 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 .num_columns(9)
                 .spacing([12.0, 6.0])
                 .show(ui, |ui| {
-                    let headers = ["Drag", "RAX", "Name", "RDI (1st)", "RSI (2nd)", "RDX (3rd)", "R10 (4th)", "R8 (5th)", "R9 (6th)"];
+                    let headers = [
+                        "Drag",
+                        "RAX",
+                        "Name",
+                        "RDI (1st)",
+                        "RSI (2nd)",
+                        "RDX (3rd)",
+                        "R10 (4th)",
+                        "R8 (5th)",
+                        "R9 (6th)",
+                    ];
                     for h in headers {
                         crate::ui::theme::header_label(ui, h);
                     }
@@ -67,8 +77,10 @@ pub fn render_syscalls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     for s in crate::syscalls::SYSCALLS.iter() {
                         if !search.is_empty() {
                             let matches_name = crate::ui::contains_case_insensitive(s.name, search);
-                            let matches_nr = crate::ui::contains_case_insensitive(&s.nr.to_string(), search);
-                            let matches_entry = crate::ui::contains_case_insensitive(s.entry_point, search);
+                            let matches_nr =
+                                crate::ui::contains_case_insensitive(&s.nr.to_string(), search);
+                            let matches_entry =
+                                crate::ui::contains_case_insensitive(s.entry_point, search);
                             let matches_args = s.args.iter().any(|arg| {
                                 crate::ui::contains_case_insensitive(arg.reg, search)
                                     || crate::ui::contains_case_insensitive(arg.arg_type, search)

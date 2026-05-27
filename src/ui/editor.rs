@@ -4,11 +4,21 @@ use eframe::egui::{self, Color32};
 
 fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax: bool) -> String {
     let mut s = String::new();
-    let (comment_char, comment_end) = if att_syntax { ("/* ", " */") } else { ("; ", "") };
+    let (comment_char, comment_end) = if att_syntax {
+        ("/* ", " */")
+    } else {
+        ("; ", "")
+    };
 
     // Add comment detailing the signature
     let args_str: Vec<&str> = info.args.iter().map(|arg| arg.arg_type).collect();
-    s.push_str(&format!("{}{}({}){}\n", comment_char, info.entry_point, args_str.join(", "), comment_end));
+    s.push_str(&format!(
+        "{}{}({}){}\n",
+        comment_char,
+        info.entry_point,
+        args_str.join(", "),
+        comment_end
+    ));
 
     let (mov_op, imm_0, comment_style) = if att_syntax {
         ("movq", "$0", "/* {} */")
@@ -23,7 +33,11 @@ fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax:
     }
 
     for arg in info.args {
-        let reg_name = if att_syntax { arg.reg } else { arg.reg.strip_prefix('%').unwrap_or(arg.reg) };
+        let reg_name = if att_syntax {
+            arg.reg
+        } else {
+            arg.reg.strip_prefix('%').unwrap_or(arg.reg)
+        };
         let arg_name = crate::ui::syscalls::extract_arg_name(arg.arg_type);
         let inst = if att_syntax {
             format!("{} {}, {}", mov_op, imm_0, reg_name)
@@ -212,7 +226,12 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             ))
             .stroke(egui::Stroke::new(
                 2.0,
-                Color32::from_rgba_unmultiplied(CYBER_CYAN.r(), CYBER_CYAN.g(), CYBER_CYAN.b(), (dnd_alpha * 255.0) as u8),
+                Color32::from_rgba_unmultiplied(
+                    CYBER_CYAN.r(),
+                    CYBER_CYAN.g(),
+                    CYBER_CYAN.b(),
+                    (dnd_alpha * 255.0) as u8,
+                ),
             ))
             .inner_margin(4.0)
     } else {
@@ -363,8 +382,8 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 for &b in sorted_chars {
                     ui.label(
                         egui::RichText::new(format!("{:02x}", b))
-                             .monospace()
-                             .color(BRIGHT_RED),
+                            .monospace()
+                            .color(BRIGHT_RED),
                     );
                 }
             });

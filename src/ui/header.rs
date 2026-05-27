@@ -5,8 +5,17 @@ use eframe::egui;
 pub fn render_header_panel(app: &mut ShellcideApp, ctx: &egui::Context) {
     egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
         ui.horizontal(|ui| {
-            let suffix = if app.target_arch == TargetArch::X86_64 { " & DEBUGGER" } else { "" };
-            let title = format!("SHELLCIDE // {} IDE{}", app.target_arch.display_name(), suffix).to_uppercase();
+            let suffix = if app.target_arch == TargetArch::X86_64 {
+                " & DEBUGGER"
+            } else {
+                ""
+            };
+            let title = format!(
+                "SHELLCIDE // {} IDE{}",
+                app.target_arch.display_name(),
+                suffix
+            )
+            .to_uppercase();
             ui.heading(egui::RichText::new(title).color(CYBER_CYAN).strong());
 
             ui.separator();

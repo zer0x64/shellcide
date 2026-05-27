@@ -5,7 +5,11 @@ use eframe::egui::{self, Color32};
 
 fn lerp_color(from: Color32, to: Color32, t: f32) -> Color32 {
     let lerp = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
-    Color32::from_rgb(lerp(from.r(), to.r()), lerp(from.g(), to.g()), lerp(from.b(), to.b()))
+    Color32::from_rgb(
+        lerp(from.r(), to.r()),
+        lerp(from.g(), to.g()),
+        lerp(from.b(), to.b()),
+    )
 }
 
 pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
@@ -69,22 +73,19 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     for (idx, &(name, val)) in reg_list.iter().enumerate() {
                         let name_str = name.to_string();
 
-                        let animation_factor = app.reg_change_times.get(name).map_or(0.0, |last_changed| {
-                            let elapsed = last_changed.elapsed().as_secs_f32();
-                            let duration = 0.8; // 800ms fade duration
-                            if elapsed < duration {
-                                ui.ctx().request_repaint();
-                                1.0 - (elapsed / duration)
-                            } else {
-                                0.0
-                            }
-                        });
+                        let animation_factor =
+                            app.reg_change_times.get(name).map_or(0.0, |last_changed| {
+                                let elapsed = last_changed.elapsed().as_secs_f32();
+                                let duration = 0.8; // 800ms fade duration
+                                if elapsed < duration {
+                                    ui.ctx().request_repaint();
+                                    1.0 - (elapsed / duration)
+                                } else {
+                                    0.0
+                                }
+                            });
 
-                        let name_color = lerp_color(
-                            CYBER_CYAN,
-                            SOFT_ORANGE,
-                            animation_factor,
-                        );
+                        let name_color = lerp_color(CYBER_CYAN, SOFT_ORANGE, animation_factor);
 
                         // Draw register name
                         ui.label(egui::RichText::new(name).color(name_color).strong());
@@ -119,11 +120,8 @@ pub fn render_registers_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             }
                         } else {
                             let label_text = format!("0x{:016X}", val);
-                            let val_color = lerp_color(
-                                Color32::WHITE,
-                                SOFT_ORANGE,
-                                animation_factor,
-                            );
+                            let val_color =
+                                lerp_color(Color32::WHITE, SOFT_ORANGE, animation_factor);
                             let val_label = ui.add(
                                 egui::Label::new(
                                     egui::RichText::new(label_text).color(val_color).monospace(),

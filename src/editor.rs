@@ -168,14 +168,14 @@ pub fn highlight_assembly(
 
     // Cyber Cyan Color Palette
     let colors = SyntaxColors {
-        default: crate::ui::theme::SOFT_WHITE, 
-        mnemonic: crate::ui::theme::CYBER_CYAN,  
-        register: crate::ui::theme::NEON_PINK, 
-        number: crate::ui::theme::SOFT_ORANGE,  
-        directive: crate::ui::theme::ICE_BLUE, 
+        default: crate::ui::theme::SOFT_WHITE,
+        mnemonic: crate::ui::theme::CYBER_CYAN,
+        register: crate::ui::theme::NEON_PINK,
+        number: crate::ui::theme::SOFT_ORANGE,
+        directive: crate::ui::theme::ICE_BLUE,
     };
-    let color_comment = crate::ui::theme::SLATE_GRAY; 
-    let color_label = crate::ui::theme::TOXIC_GREEN; 
+    let color_comment = crate::ui::theme::SLATE_GRAY;
+    let color_label = crate::ui::theme::TOXIC_GREEN;
 
     let mut chars = code.chars().peekable();
     let mut current_token = String::new();

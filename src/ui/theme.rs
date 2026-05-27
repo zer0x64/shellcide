@@ -16,11 +16,7 @@ pub const GLOOM_GRAY: Color32 = Color32::from_rgb(48, 54, 61);
 pub const LIGHT_GRAY: Color32 = Color32::from_rgb(201, 209, 217);
 
 pub(crate) fn header_label(ui: &mut egui::Ui, text: &str) {
-    ui.label(
-        egui::RichText::new(text)
-            .strong()
-            .color(CYBER_CYAN),
-    );
+    ui.label(egui::RichText::new(text).strong().color(CYBER_CYAN));
 }
 
 /// Custom Styling settings for Cyber Cyan dark theme interface.
@@ -58,4 +54,3 @@ pub fn apply_cyber_cyan_theme(ctx: &egui::Context) {
     style.visuals = visuals;
     ctx.set_style(style);
 }
-

@@ -5,8 +5,6 @@ use crate::ui::theme::{
 };
 use eframe::egui::{self, Color32};
 
-
-
 fn dbg_button(ui: &mut egui::Ui, enabled: bool, text: &str, fill: Color32) -> egui::Response {
     ui.add_enabled(
         enabled,
@@ -86,18 +84,13 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             }
 
             // Terminate
-            let stop_btn = dbg_button(
-                ui,
-                app.is_running,
-                "⏹ Stop",
-                BRIGHT_RED,
-            );
+            let stop_btn = dbg_button(ui, app.is_running, "⏹ Stop", BRIGHT_RED);
             if stop_btn.clicked() {
                 app.cmd_tx.send(DebuggerCommand::Terminate).unwrap();
             }
         }
     });
- 
+
     ui.separator();
 
     ui.collapsing("🔒 Compression, Encryption & Encoding Pipeline", |ui| {
@@ -213,7 +206,10 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             if is_native {
                                 // 1. Breakpoint margin toggle button
                                 let bp_text = if has_bp { "🔴" } else { "  " };
-                                let bp_btn = ui.add(egui::Button::new(fmt_text(bp_text, Color32::WHITE, false)).frame(false));
+                                let bp_btn = ui.add(
+                                    egui::Button::new(fmt_text(bp_text, Color32::WHITE, false))
+                                        .frame(false),
+                                );
                                 if bp_btn.clicked() {
                                     clicked_bp = Some((addr, has_bp));
                                 }
@@ -224,7 +220,11 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             }
 
                             // 3. Instruction address
-                            let addr_color = if is_current { CYBER_CYAN } else { Color32::GRAY };
+                            let addr_color = if is_current {
+                                CYBER_CYAN
+                            } else {
+                                Color32::GRAY
+                            };
                             ui.label(fmt_text(&format!("0x{:08X}:", addr), addr_color, false));
 
                             // 4. Hex machine bytes
@@ -244,7 +244,11 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                             });
 
                             // 5. Mnemonic & Opcode operands
-                            let text_color = if is_current { CYBER_CYAN } else { Color32::WHITE };
+                            let text_color = if is_current {
+                                CYBER_CYAN
+                            } else {
+                                Color32::WHITE
+                            };
                             ui.label(fmt_text(&inst.mnemonic, text_color, true));
                             ui.label(fmt_text(&inst.op_str, text_color, false));
                             ui.end_row();
@@ -265,7 +269,11 @@ pub fn render_console_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         ui.selectable_value(&mut app.active_tab, ConsoleTab::Console, "Status Console");
         ui.selectable_value(&mut app.active_tab, ConsoleTab::Stdout, "Stdout");
         ui.selectable_value(&mut app.active_tab, ConsoleTab::Stderr, "Stderr");
-        ui.selectable_value(&mut app.active_tab, ConsoleTab::Shellcode, "Shellcode Output");
+        ui.selectable_value(
+            &mut app.active_tab,
+            ConsoleTab::Shellcode,
+            "Shellcode Output",
+        );
     });
 
     ui.separator();
@@ -291,11 +299,7 @@ pub fn render_console_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
                     for (label, val) in formats {
                         ui.horizontal(|ui| {
-                            ui.label(
-                                egui::RichText::new(label)
-                                    .strong()
-                                    .color(CYBER_CYAN),
-                            );
+                            ui.label(egui::RichText::new(label).strong().color(CYBER_CYAN));
                             if ui.button("📋 Copy").clicked() {
                                 ui.ctx().copy_text(val.clone());
                             }

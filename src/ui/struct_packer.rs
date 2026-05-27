@@ -392,11 +392,21 @@ fn format_assembly_block(
     description: &str,
 ) -> String {
     let mut out = String::new();
-    let (comment_start, comment_end) = if att_syntax { ("/* ", " */") } else { ("; ", "") };
-    out.push_str(&format!("{}{}{}\n", comment_start, description, comment_end));
+    let (comment_start, comment_end) = if att_syntax {
+        ("/* ", " */")
+    } else {
+        ("; ", "")
+    };
+    out.push_str(&format!(
+        "{}{}{}\n",
+        comment_start, description, comment_end
+    ));
     for &(intel_dir, att_dir, comment) in lines {
         let dir = if att_syntax { att_dir } else { intel_dir };
-        out.push_str(&format!("{:<30} {}{}{}\n", dir, comment_start, comment, comment_end));
+        out.push_str(&format!(
+            "{:<30} {}{}{}\n",
+            dir, comment_start, comment, comment_end
+        ));
     }
     out
 }
@@ -637,8 +647,15 @@ fn format_stack_push_assembly(bytes: &[u8], att_syntax: bool) -> String {
     }
 
     let mut out = String::new();
-    let (comment_start, comment_end) = if att_syntax { ("/* ", " */") } else { ("; ", "") };
-    out.push_str(&format!("{}Stack push sequence (reverse order){}\n", comment_start, comment_end));
+    let (comment_start, comment_end) = if att_syntax {
+        ("/* ", " */")
+    } else {
+        ("; ", "")
+    };
+    out.push_str(&format!(
+        "{}Stack push sequence (reverse order){}\n",
+        comment_start, comment_end
+    ));
 
     for (i, &val) in chunks.iter().enumerate().rev() {
         let start_byte = i * 8;
@@ -654,9 +671,15 @@ fn format_stack_push_assembly(bytes: &[u8], att_syntax: bool) -> String {
             }
         } else {
             if att_syntax {
-                out.push_str(&format!("movabs $0x{:016X}, %rax\npushq %rax         {}\n", val, comment));
+                out.push_str(&format!(
+                    "movabs $0x{:016X}, %rax\npushq %rax         {}\n",
+                    val, comment
+                ));
             } else {
-                out.push_str(&format!("mov rax, 0x{:016X}\npush rax           {}\n", val, comment));
+                out.push_str(&format!(
+                    "mov rax, 0x{:016X}\npush rax           {}\n",
+                    val, comment
+                ));
             }
         }
     }

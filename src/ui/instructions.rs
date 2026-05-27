@@ -1516,7 +1516,14 @@ pub fn render_instructions_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 .num_columns(6)
                 .spacing([12.0, 6.0])
                 .show(ui, |ui| {
-                    let headers = ["Drag", "Action", "Instruction", "Syntax", "Description", "Shellcode Tip"];
+                    let headers = [
+                        "Drag",
+                        "Action",
+                        "Instruction",
+                        "Syntax",
+                        "Description",
+                        "Shellcode Tip",
+                    ];
                     for h in headers {
                         crate::ui::theme::header_label(ui, h);
                     }
@@ -1528,7 +1535,10 @@ pub fn render_instructions_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                                 || crate::ui::contains_case_insensitive(inst.syntax_intel, &search)
                                 || crate::ui::contains_case_insensitive(inst.syntax_att, &search)
                                 || crate::ui::contains_case_insensitive(inst.description, &search)
-                                || crate::ui::contains_case_insensitive(inst.shellcode_tip, &search);
+                                || crate::ui::contains_case_insensitive(
+                                    inst.shellcode_tip,
+                                    &search,
+                                );
                             if !matches {
                                 continue;
                             }

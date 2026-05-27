@@ -24,7 +24,7 @@ This is very much a WIP, but in my opinion it's already better to use compared t
 - [ ] Cross-platform support (Windows, macOS)
 - [ ] Cross-architecture debugging support (via emulation)
 - [ ] Native architecture debugger for non x86_64 architectures
-- [ ] Payload encoding (e.g. shellcode compression, encryption, badchars avoidance)
+- [x] Payload encoding (e.g. shellcode compression, encryption, badchars avoidance)
 - [ ] Payload encoding plugin system (using wasm plugins)
 
 ## Run

@@ -4,11 +4,11 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use crate::assembler::assemble;
-use crate::encoder::Encryptor;
 use crate::debugger::{CpuRegisters, DebuggerCommand, DebuggerEvent, Pid, CODE_BASE, DATA_BASE};
 use crate::disassembler::{disassemble_code, DisassembledInstruction};
-use crate::ui::LeftBottomTab;
+use crate::encoder::Encryptor;
 use crate::ui::struct_packer::StructPackerState;
+use crate::ui::LeftBottomTab;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TargetArch {
@@ -253,7 +253,10 @@ impl ShellcideApp {
         }
     }
 
-    pub(crate) fn run_post_processing_pipeline(&mut self, raw_bytes: &[u8]) -> Result<Vec<u8>, String> {
+    pub(crate) fn run_post_processing_pipeline(
+        &mut self,
+        raw_bytes: &[u8],
+    ) -> Result<Vec<u8>, String> {
         let mut current_payload = raw_bytes.to_vec();
 
         // 0. Compression Stage
@@ -263,14 +266,30 @@ impl ShellcideApp {
             let bad_chars = crate::assembler::parse_bad_characters(&self.bad_chars_input);
             let marker = match crate::encoder::find_best_rle_marker(&current_payload, &bad_chars) {
                 Some(m) => m,
-                None => return Err("Failed to find a suitable RLE marker that avoids bad characters".to_string()),
+                None => {
+                    return Err(
+                        "Failed to find a suitable RLE marker that avoids bad characters"
+                            .to_string(),
+                    )
+                }
             };
             self.resolved_compression_marker = Some(marker);
-            
+
             let compressed = crate::encoder::rle_compress(&current_payload, marker);
-            let stub_code = crate::encoder::generate_rle_stub(marker, compressed.len(), current_payload.len(), self.target_arch, self.att_syntax)?;
-            let stub_bytes = assemble(&stub_code, CODE_BASE as u64, self.att_syntax, self.target_arch)?;
-            
+            let stub_code = crate::encoder::generate_rle_stub(
+                marker,
+                compressed.len(),
+                current_payload.len(),
+                self.target_arch,
+                self.att_syntax,
+            )?;
+            let stub_bytes = assemble(
+                &stub_code,
+                CODE_BASE as u64,
+                self.att_syntax,
+                self.target_arch,
+            )?;
+
             let mut next_payload = stub_bytes;
             next_payload.extend_from_slice(&compressed);
             let stub_size = next_payload.len() - compressed.len();
@@ -295,14 +314,27 @@ impl ShellcideApp {
                 crate::encoder::EncryptionType::Add => Box::new(crate::encoder::AddEncryptor),
             };
             let encrypted = encryptor.encrypt(&current_payload, &key);
-            let stub_code = encryptor.generate_stub(&key, encrypted.len(), self.target_arch, self.att_syntax)?;
-            let stub_bytes = assemble(&stub_code, CODE_BASE as u64, self.att_syntax, self.target_arch)?;
-            
+            let stub_code = encryptor.generate_stub(
+                &key,
+                encrypted.len(),
+                self.target_arch,
+                self.att_syntax,
+            )?;
+            let stub_bytes = assemble(
+                &stub_code,
+                CODE_BASE as u64,
+                self.att_syntax,
+                self.target_arch,
+            )?;
+
             let mut next_payload = stub_bytes;
             next_payload.extend_from_slice(&encrypted);
             let stub_size = next_payload.len() - encrypted.len();
             current_payload = next_payload;
-            self.log(&format!("[+] Encrypted with {}. Stub size: {} bytes.", name, stub_size));
+            self.log(&format!(
+                "[+] Encrypted with {}. Stub size: {} bytes.",
+                name, stub_size
+            ));
         }
 
         // 2. Encoding Stage
@@ -331,7 +363,10 @@ impl ShellcideApp {
             )?;
             current_payload = encoded_payload;
             self.resolved_encoding_key = Some(key);
-            self.log(&format!("[✓] Encoded with {}. Resolved key: 0x{:02X}", name, key));
+            self.log(&format!(
+                "[✓] Encoded with {}. Resolved key: 0x{:02X}",
+                name, key
+            ));
         }
 
         Ok(current_payload)
@@ -381,8 +416,12 @@ impl ShellcideApp {
                 }
 
                 self.compiled_bytes = final_bytes.clone();
-                self.disassembly =
-                    disassemble_code(&final_bytes, CODE_BASE as u64, self.att_syntax, self.target_arch);
+                self.disassembly = disassemble_code(
+                    &final_bytes,
+                    CODE_BASE as u64,
+                    self.att_syntax,
+                    self.target_arch,
+                );
 
                 // Calculate which lines contain bad characters (only if no encoding/encryption was done,
                 // or mapped to disassembled instructions if possible)
@@ -436,7 +475,12 @@ impl ShellcideApp {
                                 data[addr - CODE_BASE] = orig_byte;
                             }
                         }
-                        self.disassembly = disassemble_code(&data, CODE_BASE as u64, self.att_syntax, self.target_arch);
+                        self.disassembly = disassemble_code(
+                            &data,
+                            CODE_BASE as u64,
+                            self.att_syntax,
+                            self.target_arch,
+                        );
                     }
                 }
             }
@@ -466,7 +510,10 @@ impl ShellcideApp {
         }
 
         self.cmd_tx
-            .send(crate::debugger::DebuggerCommand::ToggleBreakpoint(addr, !was_present))
+            .send(crate::debugger::DebuggerCommand::ToggleBreakpoint(
+                addr,
+                !was_present,
+            ))
             .ok();
 
         let action = if was_present { "Removed" } else { "Added" };
@@ -675,7 +722,11 @@ impl eframe::App for ShellcideApp {
         // Poll event queue
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
-                DebuggerEvent::Started { pid, regs, pc_breakpoints } => {
+                DebuggerEvent::Started {
+                    pid,
+                    regs,
+                    pc_breakpoints,
+                } => {
                     self.is_running = true;
                     self.is_stopped = false;
                     self.previous_regs = None;
@@ -922,13 +973,13 @@ mod tests {
         let mut app = dummy_app(vec![]);
         app.compression_type = crate::encoder::CompressionType::Rle;
         app.bad_chars_input = "00".to_string(); // avoid null bytes
-        
+
         // 10 identical NOPs
         let payload = vec![0x90; 10];
         let pipeline_res = app.run_post_processing_pipeline(&payload);
         assert!(pipeline_res.is_ok());
         let final_bytes = pipeline_res.unwrap();
-        
+
         // Must contain RLE stub bytes and compressed payload
         assert!(!final_bytes.is_empty());
         assert!(app.resolved_compression_marker.is_some());
@@ -940,7 +991,10 @@ mod tests {
     #[test]
     fn test_format_python() {
         let app_empty = dummy_app(vec![]);
-        assert_eq!(app_empty.format_python(&app_empty.compiled_bytes), "shellcode = b\"\"");
+        assert_eq!(
+            app_empty.format_python(&app_empty.compiled_bytes),
+            "shellcode = b\"\""
+        );
 
         let app_short = dummy_app(vec![0x90, 0xcc]);
         assert_eq!(
@@ -956,7 +1010,10 @@ mod tests {
     #[test]
     fn test_format_c() {
         let app_empty = dummy_app(vec![]);
-        assert_eq!(app_empty.format_c(&app_empty.compiled_bytes), "unsigned char shellcode[] = \"\";");
+        assert_eq!(
+            app_empty.format_c(&app_empty.compiled_bytes),
+            "unsigned char shellcode[] = \"\";"
+        );
 
         let app_short = dummy_app(vec![0x90, 0xcc]);
         assert_eq!(
@@ -972,7 +1029,10 @@ mod tests {
     #[test]
     fn test_format_rust() {
         let app_empty = dummy_app(vec![]);
-        assert_eq!(app_empty.format_rust(&app_empty.compiled_bytes), "const SHELLCODE: &[u8] = &[];");
+        assert_eq!(
+            app_empty.format_rust(&app_empty.compiled_bytes),
+            "const SHELLCODE: &[u8] = &[];"
+        );
 
         let app_short = dummy_app(vec![0x90, 0xcc]);
         assert_eq!(
