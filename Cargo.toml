@@ -1,7 +1,13 @@
 [package]
 name = "shellcide"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+authors = ["zer0x64 <zer0x64@pm.me>"]
+description = "A shellcoding IDE"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/zer0x64/shellcide"
+homepage = "https://github.com/zer0x64/shellcide"
+readme = "README.md"
 
 [dependencies]
 # GUI Toolkit
