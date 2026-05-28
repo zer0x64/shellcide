@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use crate::assembler::assemble;
 use crate::debugger::{CpuRegisters, DebuggerCommand, DebuggerEvent, Pid, CODE_BASE, DATA_BASE};
 use crate::disassembler::{disassemble_code, DisassembledInstruction};
-use crate::encoder::Encryptor;
 use crate::ui::struct_packer::StructPackerState;
 use crate::ui::LeftBottomTab;
 
@@ -299,22 +298,14 @@ impl ShellcideApp {
 
         // 1. Encryption Stage
         if self.encryption_type != crate::encoder::EncryptionType::None {
-            let key = crate::encoder::parse_key(&self.encryption_key);
-            let name = match self.encryption_type {
-                crate::encoder::EncryptionType::None => unreachable!(),
-                crate::encoder::EncryptionType::Xor => "XOR",
-                crate::encoder::EncryptionType::Add => "ADD",
-                crate::encoder::EncryptionType::Aes => "AES",
-            };
+            let mut key = crate::encoder::parse_key(&self.encryption_key);
             if key.is_empty() {
-                return Err(format!("{} encryption key is empty or invalid", name));
+                let random_key: [u8; 16] = rand::random();
+                self.encryption_key = self.format_raw_hex(&random_key);
+                key = random_key.to_vec();
             }
-            let encryptor: Box<dyn Encryptor> = match self.encryption_type {
-                crate::encoder::EncryptionType::None => unreachable!(),
-                crate::encoder::EncryptionType::Xor => Box::new(crate::encoder::XorEncryptor),
-                crate::encoder::EncryptionType::Add => Box::new(crate::encoder::AddEncryptor),
-                crate::encoder::EncryptionType::Aes => Box::new(crate::encoder::AesEncryptor),
-            };
+            let name = self.encryption_type.short_name();
+            let encryptor = self.encryption_type.get_encryptor().unwrap();
             let encrypted = encryptor.encrypt(&current_payload, &key);
             let stub_code = encryptor.generate_stub(
                 &key,
@@ -343,19 +334,9 @@ impl ShellcideApp {
         if self.encoding_type == crate::encoder::EncodingType::None {
             self.resolved_encoding_key = None;
         } else {
-            let name = match self.encoding_type {
-                crate::encoder::EncodingType::None => unreachable!(),
-                crate::encoder::EncodingType::Xor => "XOR",
-                crate::encoder::EncodingType::Add => "ADD",
-                crate::encoder::EncodingType::Sub => "SUB",
-            };
+            let name = self.encoding_type.short_name();
+            let encoder = self.encoding_type.get_encoder().unwrap();
             let bad_chars = crate::assembler::parse_bad_characters(&self.bad_chars_input);
-            let encoder: Box<dyn crate::encoder::Encoder> = match self.encoding_type {
-                crate::encoder::EncodingType::None => unreachable!(),
-                crate::encoder::EncodingType::Xor => Box::new(crate::encoder::XorEncoder),
-                crate::encoder::EncodingType::Add => Box::new(crate::encoder::AddEncoder),
-                crate::encoder::EncodingType::Sub => Box::new(crate::encoder::SubEncoder),
-            };
             let (key, encoded_payload) = crate::encoder::find_best_encoding(
                 &*encoder,
                 &current_payload,
@@ -988,6 +969,22 @@ mod tests {
         let marker = app.resolved_compression_marker.unwrap();
         assert_ne!(marker, 0x00);
         assert_ne!(marker, 0x90);
+    }
+
+    #[test]
+    fn test_pipeline_with_empty_encryption_key() {
+        let mut app = dummy_app(vec![]);
+        app.encryption_type = crate::encoder::EncryptionType::Xor;
+        app.encryption_key = "".to_string(); // empty key
+
+        let payload = vec![0x90; 10];
+        let pipeline_res = app.run_post_processing_pipeline(&payload);
+        assert!(pipeline_res.is_ok());
+        let final_bytes = pipeline_res.unwrap();
+
+        // Must succeed, generate a random key of 16 bytes
+        assert!(!final_bytes.is_empty());
+        assert_eq!(app.encryption_key.len(), 32); // 16 bytes hex representation
     }
 
     #[test]

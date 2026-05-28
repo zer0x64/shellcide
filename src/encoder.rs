@@ -148,6 +148,24 @@ impl EncryptionType {
             Self::Aes => "AES (128-bit Key)",
         }
     }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Xor => "XOR",
+            Self::Add => "ADD",
+            Self::Aes => "AES",
+        }
+    }
+
+    pub fn get_encryptor(&self) -> Option<Box<dyn Encryptor>> {
+        match self {
+            Self::None => None,
+            Self::Xor => Some(Box::new(XorEncryptor)),
+            Self::Add => Some(Box::new(AddEncryptor)),
+            Self::Aes => Some(Box::new(AesEncryptor)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -168,6 +186,24 @@ impl EncodingType {
             Self::Xor => "XOR (1-Byte Key)",
             Self::Add => "ADD (1-Byte Key)",
             Self::Sub => "SUB (1-Byte Key)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Xor => "XOR",
+            Self::Add => "ADD",
+            Self::Sub => "SUB",
+        }
+    }
+
+    pub fn get_encoder(&self) -> Option<Box<dyn Encoder>> {
+        match self {
+            Self::None => None,
+            Self::Xor => Some(Box::new(XorEncoder)),
+            Self::Add => Some(Box::new(AddEncoder)),
+            Self::Sub => Some(Box::new(SubEncoder)),
         }
     }
 }
@@ -205,6 +241,14 @@ pub struct AesEncryptor;
 pub struct XorEncoder;
 pub struct AddEncoder;
 pub struct SubEncoder;
+
+pub(crate) fn format_comma_hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|b| format!("0x{:02x}", b))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 pub fn generate_mov_reg_nullfree(reg: &str, val: usize, att_syntax: bool) -> String {
     let parts = if let Some(p) = REGISTERS.iter().find(|p| p.r64 == reg || p.r32 == reg) {
@@ -618,12 +662,7 @@ fn generate_repeating_key_stub(
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
             s.push_str("    .byte ");
-            s.push_str(
-                &key.iter()
-                    .map(|b| format!("0x{:02x}", b))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
+            s.push_str(&format_comma_hex(key));
             s.push('\n');
             Ok(s)
         }
@@ -672,12 +711,7 @@ fn generate_repeating_key_stub(
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
             s.push_str("    .byte ");
-            s.push_str(
-                &key.iter()
-                    .map(|b| format!("0x{:02x}", b))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
+            s.push_str(&format_comma_hex(key));
             s.push('\n');
             Ok(s)
         }
@@ -871,11 +905,7 @@ impl Encryptor for AesEncryptor {
         let key: [u8; 16] = expand_key(key);
 
         // Format key as little-endian hex for use in assembly
-        let key = key
-            .iter()
-            .map(|b| format!("0x{:02x}", b))
-            .collect::<Vec<String>>()
-            .join(", ");
+        let key_str = format_comma_hex(&key);
         let n_blocks = ((payload_len + 15) & !15) / 16;
 
         match arch {
@@ -989,7 +1019,7 @@ impl Encryptor for AesEncryptor {
                 s.push_str("    ret\n");
                 s.push_str("get_payload:\n");
                 s.push_str("    call decoder_stub\n");
-                s.push_str(&format!("    .db {}\n", key));
+                s.push_str(&format!("    .db {}\n", key_str));
                 Ok(s)
             }
             _ => {

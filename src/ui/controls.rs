@@ -125,7 +125,8 @@ pub fn render_controls_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
 
             if app.encryption_type != crate::encoder::EncryptionType::None {
                 ui.label("Key:");
-                ui.text_edit_singleline(&mut app.encryption_key);
+                ui.add(egui::TextEdit::singleline(&mut app.encryption_key).hint_text("leave empty for random"))
+                    .on_hover_text("Leave key empty to automatically generate a random one");
             }
         });
 
