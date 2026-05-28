@@ -304,6 +304,7 @@ impl ShellcideApp {
                 crate::encoder::EncryptionType::None => unreachable!(),
                 crate::encoder::EncryptionType::Xor => "XOR",
                 crate::encoder::EncryptionType::Add => "ADD",
+                crate::encoder::EncryptionType::Aes => "AES",
             };
             if key.is_empty() {
                 return Err(format!("{} encryption key is empty or invalid", name));
@@ -312,6 +313,7 @@ impl ShellcideApp {
                 crate::encoder::EncryptionType::None => unreachable!(),
                 crate::encoder::EncryptionType::Xor => Box::new(crate::encoder::XorEncryptor),
                 crate::encoder::EncryptionType::Add => Box::new(crate::encoder::AddEncryptor),
+                crate::encoder::EncryptionType::Aes => Box::new(crate::encoder::AesEncryptor),
             };
             let encrypted = encryptor.encrypt(&current_payload, &key);
             let stub_code = encryptor.generate_stub(

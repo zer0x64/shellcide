@@ -1,5 +1,8 @@
+use aes::cipher::{BlockModeEncrypt, KeyInit};
+use rand::Rng;
+
 use crate::app::TargetArch;
-use std::collections::HashSet;
+use std::{collections::HashSet, io::Read};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompressionType {
@@ -131,16 +134,18 @@ pub enum EncryptionType {
     None,
     Xor,
     Add,
+    Aes,
 }
 
 impl EncryptionType {
-    pub const ALL: [Self; 3] = [Self::None, Self::Xor, Self::Add];
+    pub const ALL: [Self; 4] = [Self::None, Self::Xor, Self::Add, Self::Aes];
 
     pub fn display_name(&self) -> &'static str {
         match self {
             Self::None => "None",
             Self::Xor => "XOR (Repeating Key)",
             Self::Add => "ADD (Repeating Key)",
+            Self::Aes => "AES (128-bit Key)",
         }
     }
 }
@@ -195,6 +200,7 @@ pub trait Encoder {
 
 pub struct XorEncryptor;
 pub struct AddEncryptor;
+pub struct AesEncryptor;
 
 pub struct XorEncoder;
 pub struct AddEncoder;
@@ -832,6 +838,167 @@ impl Encryptor for AddEncryptor {
     }
 }
 
+impl Encryptor for AesEncryptor {
+    fn name(&self) -> &'static str {
+        "AES (128-bit Key)"
+    }
+
+    fn encrypt(&self, data: &[u8], key: &[u8]) -> Vec<u8> {
+        // Get 16 bytes without failing
+        let key = expand_key(key);
+
+        // Pad data to multiple of 16 bytes with nops
+        let mut data = data.to_vec();
+        data.resize((data.len() + 15) & !15, 0x90);
+        let data_len = data.len();
+
+        type Aes = ecb::Encryptor<aes::Aes128>;
+        let encryptor = Aes::new(&key.into());
+        let _ =
+            encryptor.encrypt_padded::<aes::cipher::block_padding::NoPadding>(&mut data, data_len);
+
+        data
+    }
+
+    fn generate_stub(
+        &self,
+        key: &[u8],
+        payload_len: usize,
+        arch: TargetArch,
+        att_syntax: bool,
+    ) -> Result<String, String> {
+        // Get 16 bytes key without failing
+        let key: [u8; 16] = expand_key(key);
+
+        // Format key as little-endian hex for use in assembly
+        let key = key
+            .iter()
+            .map(|b| format!("0x{:02x}", b))
+            .collect::<Vec<String>>()
+            .join(", ");
+        let n_blocks = ((payload_len + 15) & !15) / 16;
+
+        match arch {
+            TargetArch::X86_64 => {
+                let mut s = String::new();
+                s.push_str("jmp get_payload\n");
+
+                if att_syntax {
+                } else {
+                    // Key expansion helper
+                    s.push_str(
+                        "
+                    key_expansion_128_helper:
+                        pshufd xmm2, xmm2, 255
+                        movdqa xmm3, xmm1
+                        push 3
+                        pop rcx
+                    Lhelper_loop:
+                        palignr xmm3, xmm4, 12
+                        pxor xmm1, xmm3
+                        loop Lhelper_loop
+                        pxor xmm1, xmm2
+                        ret
+                    \n",
+                    );
+                    s.push_str(&format!(
+                        "
+                    decoder_stub:
+                        # Get pointer to encrypted payload
+                        pop rsi;
+
+                        # Clear xmm4 to zero for the palignr byte-shift inside the helper
+                        pxor xmm4, xmm4
+
+                        # Load original key (Encryption Round 0)
+                        movdqu xmm1, [rsi]
+                        add rsi, 16
+
+                        # We want to return to the payload after decryption
+                        push rsi
+
+                        movdqa xmm5, xmm1       # xmm5 = Decryption Round 10 key
+                        # Round 1 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x01
+                        call key_expansion_128_helper
+                        aesimc xmm6, xmm1       # xmm6 = Decryption Round 9 key
+                        # Round 2 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x02
+                        call key_expansion_128_helper
+                        aesimc xmm7, xmm1       # xmm7 = Decryption Round 8 key
+                        # Round 3 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x04
+                        call key_expansion_128_helper
+                        aesimc xmm8, xmm1       # xmm8 = Decryption Round 7 key
+                        # Round 4 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x08
+                        call key_expansion_128_helper
+                        aesimc xmm9, xmm1       # xmm9 = Decryption Round 6 key
+                        # Round 5 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x10
+                        call key_expansion_128_helper
+                        aesimc xmm10, xmm1      # xmm10 = Decryption Round 5 key
+                        # Round 6 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x20
+                        call key_expansion_128_helper
+                        aesimc xmm11, xmm1      # xmm11 = Decryption Round 4 key
+                        # Round 7 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x40
+                        call key_expansion_128_helper
+                        aesimc xmm12, xmm1      # xmm12 = Decryption Round 3 key
+                        # Round 8 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x80
+                        call key_expansion_128_helper
+                        aesimc xmm13, xmm1      # xmm13 = Decryption Round 2 key
+                        # Round 9 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x1b
+                        call key_expansion_128_helper
+                        aesimc xmm14, xmm1      # xmm14 = Decryption Round 1 key
+                        # Round 10 Key Expansion
+                        aeskeygenassist xmm2, xmm1, 0x36
+                        call key_expansion_128_helper
+                        movdqa xmm15, xmm1      # xmm15 = Decryption Round 0 key (no aesimc)
+
+                        mov rcx, {n_blocks}
+                    Lblock_loop:
+                        # Load 16-byte ciphertext block
+                        movdqu xmm0, [rsi]
+                        # Initial XOR step with Decryption Round 0 Key
+                        pxor xmm0, xmm15
+                        # 9 unrolled intermediate rounds using the keys stored in registers
+                        aesdec xmm0, xmm14
+                        aesdec xmm0, xmm13
+                        aesdec xmm0, xmm12
+                        aesdec xmm0, xmm11
+                        aesdec xmm0, xmm10
+                        aesdec xmm0, xmm9
+                        aesdec xmm0, xmm8
+                        aesdec xmm0, xmm7
+                        aesdec xmm0, xmm6
+                        # Final round of aesdeclast using Decryption Round 10 Key
+                        aesdeclast xmm0, xmm5
+                        # Store decrypted plaintext block
+                        movdqu [rsi], xmm0
+                        add rsi, 16
+                        dec rcx
+                        jnz Lblock_loop
+                    "
+                    ));
+                }
+
+                s.push_str("    ret\n");
+                s.push_str("get_payload:\n");
+                s.push_str("    call decoder_stub\n");
+                s.push_str(&format!("    .db {}\n", key));
+                Ok(s)
+            }
+            _ => {
+                return Err("Unsupported architecture".to_string());
+            }
+        }
+    }
+}
+
 impl Encoder for XorEncoder {
     fn name(&self) -> &'static str {
         "XOR (1-Byte Key)"
@@ -997,6 +1164,29 @@ pub fn find_best_encoding(
     }
 
     Err("Failed to find a key that avoids bad characters".to_string())
+}
+
+/// Expands a key to the specified length using BLAKE3 hashing.
+/// Useful for allowing users to specify a key of any length.
+fn expand_key<const N: usize>(key: &[u8]) -> [u8; N] {
+    let mut buf = [0u8; N];
+
+    if key.len() == 0 {
+        // If no key is specified, generate a random key of length n
+        let mut rng = rand::rng();
+        rng.fill_bytes(&mut buf);
+    } else if key.len() != N {
+        // If the key is not the correct length, hash it to get a key of length n
+        let mut hasher = blake3::Hasher::new();
+        let mut hash = hasher.update(key).finalize_xof();
+
+        hash.read_exact(&mut buf).expect("blake3 XOF exhausted");
+    } else {
+        // If the key is the correct length, use it as-is
+        buf.copy_from_slice(key);
+    }
+
+    buf
 }
 
 #[cfg(test)]
