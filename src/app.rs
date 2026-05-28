@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use eframe::egui;
 use flume::{Receiver, Sender};
 use std::collections::{HashMap, HashSet};
@@ -86,7 +87,7 @@ pub struct ShellcideApp {
     pub(crate) instructions_search: String,
     pub(crate) bad_chars_input: String,
     pub(crate) bad_char_lines: std::collections::HashSet<usize>,
-    pub(crate) reg_change_times: std::collections::HashMap<String, std::time::Instant>,
+    pub(crate) reg_change_times: std::collections::HashMap<String, DateTime<Utc>>,
     pub(crate) auto_follow_rsp: bool,
 
     // Struct Packer and bottom-left tab
@@ -101,6 +102,11 @@ pub struct ShellcideApp {
     pub(crate) encoding_type: crate::encoder::EncodingType,
     pub(crate) resolved_encoding_key: Option<u8>,
     pub(crate) breakpoint_originals: std::collections::HashMap<usize, u8>,
+    pub(crate) last_editor_change_time: Option<DateTime<Utc>>,
+    pub(crate) last_disasm_change_time: Option<DateTime<Utc>>,
+    pub(crate) mem_change_times: std::collections::HashMap<usize, DateTime<Utc>>,
+    pub(crate) last_assemble_status: Option<bool>,
+    pub(crate) last_assemble_time: Option<DateTime<Utc>>,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -183,6 +189,11 @@ impl ShellcideApp {
             encoding_type: crate::encoder::EncodingType::None,
             resolved_encoding_key: None,
             breakpoint_originals: std::collections::HashMap::new(),
+            last_editor_change_time: None,
+            last_disasm_change_time: None,
+            mem_change_times: std::collections::HashMap::new(),
+            last_assemble_status: None,
+            last_assemble_time: None,
         }
     }
 
@@ -376,6 +387,8 @@ impl ShellcideApp {
                     Ok(final_b) => final_b,
                     Err(e) => {
                         self.log(&format!("[✗] Post-processing pipeline failed: {}", e));
+                        self.last_assemble_status = Some(false);
+                        self.last_assemble_time = Some(Utc::now());
                         return;
                     }
                 };
@@ -429,22 +442,38 @@ impl ShellcideApp {
                 self.regs = CpuRegisters::default();
                 self.stdout_log.clear();
                 self.stderr_log.clear();
+
+                self.last_assemble_status = Some(true);
+                self.last_assemble_time = Some(Utc::now());
+                self.last_disasm_change_time = Some(Utc::now());
             }
             Err(e) => {
                 self.log(&format!("[✗] Shellcode assembly failed:\n{}", e));
+                self.last_assemble_status = Some(false);
+                self.last_assemble_time = Some(Utc::now());
             }
         }
     }
 
     pub(crate) fn refresh_memory(&mut self) {
-        if let Some(pid) = *self.shared_pid.lock().unwrap() {
+        let new_data = if let Some(pid) = *self.shared_pid.lock().unwrap() {
             if let Ok(data) = crate::debugger::read_child_mem(pid, self.memory_base_address, 256) {
-                self.memory_data = data;
+                data
+            } else {
+                vec![0; 256]
             }
         } else {
-            // Fill with zero if no process is running
-            self.memory_data = vec![0; 256];
+            vec![0; 256]
+        };
+
+        for (i, &new_val) in new_data.iter().enumerate() {
+            let old_val = self.memory_data.get(i).copied();
+            if old_val != Some(new_val) {
+                self.mem_change_times
+                    .insert(self.memory_base_address + i, Utc::now());
+            }
         }
+        self.memory_data = new_data;
     }
 
     pub(crate) fn refresh_disassembly_from_running_process(&mut self) {
@@ -458,12 +487,16 @@ impl ShellcideApp {
                                 data[addr - CODE_BASE] = orig_byte;
                             }
                         }
-                        self.disassembly = disassemble_code(
+                        let new_disasm = disassemble_code(
                             &data,
                             CODE_BASE as u64,
                             self.att_syntax,
                             self.target_arch,
                         );
+                        if self.disassembly != new_disasm {
+                            self.disassembly = new_disasm;
+                            self.last_disasm_change_time = Some(Utc::now());
+                        }
                     }
                 }
             }
@@ -603,7 +636,7 @@ impl ShellcideApp {
         prev: CpuRegisters,
         next: CpuRegisters,
     ) {
-        let now = std::time::Instant::now();
+        let now = Utc::now();
         for name in [
             "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "rip", "rflags", "r8", "r9",
             "r10", "r11", "r12", "r13", "r14", "r15",
@@ -933,6 +966,11 @@ impl ShellcideApp {
             encoding_type: crate::encoder::EncodingType::None,
             resolved_encoding_key: None,
             breakpoint_originals: std::collections::HashMap::new(),
+            last_editor_change_time: None,
+            last_disasm_change_time: None,
+            mem_change_times: std::collections::HashMap::new(),
+            last_assemble_status: None,
+            last_assemble_time: None,
         }
     }
 }

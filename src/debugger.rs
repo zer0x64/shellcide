@@ -26,6 +26,7 @@ pub struct Pid(pub i32);
 pub use nix::sys::signal::Signal;
 #[cfg(target_arch = "wasm32")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Signal {
     SIGTRAP,
     SIGSEGV,

@@ -39,10 +39,16 @@ fn main() -> Result<(), eframe::Error> {
 
     // 5. Initialize Native GUI viewport window
     println!("[+] Starting eframe GUI loop...");
+    let icon_rgba = include_bytes!("../assets/icon_64.rgba").to_vec();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Shellcide // x86_64 Shellcoding IDE & Debugger")
-            .with_inner_size([1280.0, 800.0]),
+            .with_inner_size([1280.0, 800.0])
+            .with_icon(std::sync::Arc::new(egui::IconData {
+                rgba: icon_rgba,
+                width: 64,
+                height: 64,
+            })),
         ..Default::default()
     };
 

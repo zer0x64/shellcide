@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#182026"/>
+      <stop offset="100%" stop-color="#0c1015"/>
+    </radialGradient>
+    
+    <!-- Neon Cyan Glow -->
+    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Neon Pink Glow -->
+    <filter id="glowPink" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bgGrad)" stroke="#00cec9" stroke-width="4" filter="url(#glowCyan)"/>
+
+  <!-- Shell terminal symbol '>' and cursor '_' in neon colors -->
+  <g transform="translate(110, 140)">
+    <!-- Terminal '>' Symbol -->
+    <path d="M 30,50 L 160,140 L 30,230" fill="none" stroke="#00cec9" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowCyan)"/>
+    
+    <!-- Cursor '_' Symbol -->
+    <line x1="190" y1="230" x2="270" y2="230" stroke="#fd79a8" stroke-width="32" stroke-linecap="round" filter="url(#glowPink)"/>
+  </g>
+
+  <!-- Hexagonal cyber accents -->
+  <path d="M 256,40 L 443,148 L 443,364 L 256,472 L 69,364 L 69,148 Z" fill="none" stroke="#55efc4" stroke-width="3" stroke-dasharray="20,10" opacity="0.4"/>
+</svg>

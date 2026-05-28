@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use eframe::egui::{self, Color32, Stroke};
 
 pub const CYBER_CYAN: Color32 = Color32::from_rgb(0, 206, 201);
@@ -53,4 +54,33 @@ pub fn apply_cyber_cyan_theme(ctx: &egui::Context) {
 
     style.visuals = visuals;
     ctx.set_style(style);
+}
+
+pub fn lerp_color(from: Color32, to: Color32, t: f32) -> Color32 {
+    let lerp = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+    Color32::from_rgb(
+        lerp(from.r(), to.r()),
+        lerp(from.g(), to.g()),
+        lerp(from.b(), to.b()),
+    )
+}
+
+/// Calculates the animation/fade-out factor (1.0 down to 0.0) based on an optional timestamp and duration.
+/// Automatically requests a repaint of the UI context if the animation is active.
+pub fn get_animation_factor(
+    last_changed: Option<DateTime<Utc>>,
+    duration_secs: f32,
+    ctx: &egui::Context,
+) -> f32 {
+    if let Some(t) = last_changed {
+        let elapsed = (chrono::Utc::now() - t).num_milliseconds() as f32 / 1000.0;
+        if elapsed < duration_secs {
+            ctx.request_repaint();
+            1.0 - (elapsed / duration_secs)
+        } else {
+            0.0
+        }
+    } else {
+        0.0
+    }
 }

@@ -1040,7 +1040,7 @@ pub fn find_best_encoding(
 fn expand_key<const N: usize>(key: &[u8]) -> [u8; N] {
     let mut buf = [0u8; N];
 
-    if key.len() == 0 {
+    if key.is_empty() {
         // If no key is specified, generate a random key of length n
         let mut rng = rand::rng();
         rng.fill_bytes(&mut buf);

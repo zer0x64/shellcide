@@ -1,5 +1,7 @@
 # Shellcide
 
+![Shellcide](assets/icon_64.png)
+
 x86_64 shellcode IDE for Linux.  
 
 ## Status

@@ -1,6 +1,9 @@
 use crate::app::ShellcideApp;
 use crate::debugger::DebuggerCommand;
-use crate::ui::theme::{CYBER_CYAN, ICE_BLUE, LAUGHTER_PURPLE, NEON_PINK, SLATE_GRAY};
+use crate::ui::theme::{
+    get_animation_factor, lerp_color, CYBER_CYAN, ICE_BLUE, LAUGHTER_PURPLE, NEON_PINK, SLATE_GRAY,
+    SOFT_ORANGE,
+};
 use eframe::egui::{self, Color32};
 
 fn with_alpha(color: Color32, alpha: u8) -> Color32 {
@@ -89,11 +92,22 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                     }
                 }
 
+                // Precompute flash factors for each byte in the row to avoid redundant lookups/calculations
+                let mut flash_factors = [0.0; 16];
+                for (c, factor) in flash_factors.iter_mut().enumerate() {
+                    let byte_addr = row_addr + c;
+                    *factor = get_animation_factor(
+                        app.mem_change_times.get(&byte_addr).copied(),
+                        0.8,
+                        ui.ctx(),
+                    );
+                }
+
                 // Address offset label
                 ui.label(egui::RichText::new(format!("0x{:08X}{}", row_addr, suffix)).monospace().color(CYBER_CYAN));
 
                 // Hex bytes
-                for c in 0..16 {
+                for (c, &flash_factor) in flash_factors.iter().enumerate() {
                     let idx = row_offset + c;
                     let byte_val = app.memory_data.get(idx).copied().unwrap_or(0);
                     let byte_addr = row_addr + c;
@@ -122,7 +136,8 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                         }
                     } else {
                         let label_text = format!("{:02X}", byte_val);
-                        let label_color = if byte_val == 0 { SLATE_GRAY } else { Color32::WHITE };
+                        let default_color = if byte_val == 0 { SLATE_GRAY } else { Color32::WHITE };
+                        let label_color = lerp_color(default_color, SOFT_ORANGE, flash_factor);
                         let label = egui::RichText::new(label_text).monospace().color(label_color);
                         let label = highlight_stack_cell(label, byte_addr, app);
                         let byte_label = ui.add(
@@ -139,12 +154,13 @@ pub fn render_memory_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
                 // ASCII representation
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
-                    for c in 0..16 {
+                    for (c, &flash_factor) in flash_factors.iter().enumerate() {
                         let idx = row_offset + c;
                         let b = app.memory_data.get(idx).copied().unwrap_or(0);
                         let byte_addr = row_addr + c;
                         let char_val = if (32..=126).contains(&b) { b as char } else { '.' };
-                        let label = egui::RichText::new(char_val.to_string()).monospace().color(ICE_BLUE);
+                        let label_color = lerp_color(ICE_BLUE, SOFT_ORANGE, flash_factor);
+                        let label = egui::RichText::new(char_val.to_string()).monospace().color(label_color);
                         let label = highlight_stack_cell(label, byte_addr, app);
                         ui.label(label);
                     }

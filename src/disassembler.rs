@@ -1,7 +1,7 @@
 use crate::app::TargetArch;
 use iced_x86::{Decoder, DecoderOptions, Formatter, GasFormatter, IntelFormatter};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DisassembledInstruction {
     pub address: u64,
     pub bytes: Vec<u8>,

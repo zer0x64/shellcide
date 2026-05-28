@@ -1,5 +1,8 @@
 use crate::app::ShellcideApp;
-use crate::ui::theme::{BRIGHT_RED, CYBER_CYAN, SLATE_GRAY};
+use crate::ui::theme::{
+    get_animation_factor, lerp_color, BRIGHT_RED, CYBER_CYAN, GLOOM_GRAY, SLATE_GRAY,
+};
+use chrono::Utc;
 use eframe::egui::{self, Color32};
 
 fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax: bool) -> String {
@@ -52,6 +55,7 @@ fn generate_syscall_boilerplate(info: &crate::syscalls::SyscallInfo, att_syntax:
 }
 
 pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
+    let old_code = app.code_input.clone();
     ui.heading("Shellcode Editor");
     ui.separator();
 
@@ -246,91 +250,105 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
             ui.fonts(|f| f.layout_job(job))
         };
 
+        let flash_factor = get_animation_factor(app.last_editor_change_time, 0.5, ui.ctx());
+        let border_color = lerp_color(GLOOM_GRAY, CYBER_CYAN, flash_factor);
+
         let scroll_height = ui.available_height() - 200.0;
-        egui::ScrollArea::vertical()
-            .max_height(scroll_height)
-            .id_salt("editor_scroll")
+        egui::Frame::none()
+            .stroke(egui::Stroke::new(1.0, border_color))
+            .inner_margin(4.0)
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    let row_height = ui.fonts(|f| f.row_height(&egui::FontId::monospace(14.0)));
-                    let margin_top = 6.0; // Matches standard TextEdit top margin
+                egui::ScrollArea::vertical()
+                    .max_height(scroll_height)
+                    .id_salt("editor_scroll")
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let row_height =
+                                ui.fonts(|f| f.row_height(&egui::FontId::monospace(14.0)));
+                            let margin_top = 6.0; // Matches standard TextEdit top margin
 
-                    // Gutter column
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 0.0; // 0.0 spacing to match text rows perfectly
-                        ui.add_space(margin_top);
+                            // Gutter column
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0; // 0.0 spacing to match text rows perfectly
+                                ui.add_space(margin_top);
 
-                        let lines_count = app.code_input.lines().count().max(1);
-                        let is_native = app.is_native_debug();
-                        for i in 0..lines_count {
-                            let has_bp = app.editor_breakpoints.contains(&i);
+                                let lines_count = app.code_input.lines().count().max(1);
+                                let is_native = app.is_native_debug();
+                                for i in 0..lines_count {
+                                    let has_bp = app.editor_breakpoints.contains(&i);
 
-                            let (rect, response) = ui.allocate_exact_size(
-                                egui::vec2(60.0, row_height),
-                                egui::Sense::click(),
-                            );
+                                    let (rect, response) = ui.allocate_exact_size(
+                                        egui::vec2(60.0, row_height),
+                                        egui::Sense::click(),
+                                    );
 
-                            if is_native && response.clicked() {
-                                let line_to_inst = app.get_line_to_inst_mapping();
-                                let resolved_addr = line_to_inst
-                                    .get(&i)
-                                    .and_then(|&idx| app.disassembly.get(idx))
-                                    .map(|inst| inst.address as usize);
+                                    if is_native && response.clicked() {
+                                        let line_to_inst = app.get_line_to_inst_mapping();
+                                        let resolved_addr = line_to_inst
+                                            .get(&i)
+                                            .and_then(|&idx| app.disassembly.get(idx))
+                                            .map(|inst| inst.address as usize);
 
-                                let was_present = app.editor_breakpoints.remove(&i);
-                                if !was_present {
-                                    app.editor_breakpoints.insert(i);
+                                        let was_present = app.editor_breakpoints.remove(&i);
+                                        if !was_present {
+                                            app.editor_breakpoints.insert(i);
+                                        }
+
+                                        if let Some(addr) = resolved_addr {
+                                            app.toggle_breakpoint(addr);
+                                        } else {
+                                            let action =
+                                                if was_present { "Removed" } else { "Added" };
+                                            app.log(&format!(
+                                                "[Breakpoint] {} at line {}",
+                                                action,
+                                                i + 1
+                                            ));
+                                        }
+                                    }
+
+                                    let text_color = if is_native && has_bp {
+                                        BRIGHT_RED
+                                    } else {
+                                        SLATE_GRAY
+                                    };
+
+                                    let bp_char = if is_native && has_bp { "● " } else { "  " };
+                                    let warn_char = if app.bad_char_lines.contains(&i) {
+                                        "⚠️ "
+                                    } else {
+                                        "  "
+                                    };
+                                    let label = format!("{}{}{:>2}", bp_char, warn_char, i + 1);
+
+                                    ui.painter().text(
+                                        rect.left_center(),
+                                        egui::Align2::LEFT_CENTER,
+                                        label,
+                                        egui::FontId::monospace(12.0),
+                                        text_color,
+                                    );
                                 }
+                            });
 
-                                if let Some(addr) = resolved_addr {
-                                    app.toggle_breakpoint(addr);
-                                } else {
-                                    let action = if was_present { "Removed" } else { "Added" };
-                                    app.log(&format!("[Breakpoint] {} at line {}", action, i + 1));
-                                }
-                            }
-
-                            let text_color = if is_native && has_bp {
-                                BRIGHT_RED
-                            } else {
-                                SLATE_GRAY
-                            };
-
-                            let bp_char = if is_native && has_bp { "● " } else { "  " };
-                            let warn_char = if app.bad_char_lines.contains(&i) {
-                                "⚠️ "
-                            } else {
-                                "  "
-                            };
-                            let label = format!("{}{}{:>2}", bp_char, warn_char, i + 1);
-
-                            ui.painter().text(
-                                rect.left_center(),
-                                egui::Align2::LEFT_CENTER,
-                                label,
-                                egui::FontId::monospace(12.0),
-                                text_color,
-                            );
-                        }
-                    });
-
-                    // The TextEdit
-                    egui::ScrollArea::horizontal()
-                        .auto_shrink([false, false])
-                        .id_salt("editor_horiz_scroll")
-                        .show(ui, |ui| {
-                            ui.add(
-                                egui::TextEdit::multiline(&mut app.code_input)
-                                    .id(text_edit_id)
-                                    .font(egui::FontId::monospace(14.0))
-                                    .code_editor()
-                                    .lock_focus(true)
-                                    .desired_width(f32::INFINITY)
-                                    .desired_rows(30)
-                                    .layouter(&mut layouter),
-                            );
+                            // The TextEdit
+                            egui::ScrollArea::horizontal()
+                                .auto_shrink([false, false])
+                                .id_salt("editor_horiz_scroll")
+                                .show(ui, |ui| {
+                                    ui.add(
+                                        egui::TextEdit::multiline(&mut app.code_input)
+                                            .id(text_edit_id)
+                                            .font(egui::FontId::monospace(14.0))
+                                            .code_editor()
+                                            .lock_focus(true)
+                                            .desired_width(f32::INFINITY)
+                                            .desired_rows(30)
+                                            .layouter(&mut layouter),
+                                    );
+                                });
                         });
-                });
+                    });
             });
     });
 
@@ -392,4 +410,8 @@ pub fn render_editor_panel(app: &mut ShellcideApp, ui: &mut egui::Ui) {
         }
         ui.add_space(4.0);
     });
+
+    if app.code_input != old_code {
+        app.last_editor_change_time = Some(Utc::now());
+    }
 }
