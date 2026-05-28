@@ -42,6 +42,12 @@ pub fn render_header_panel(app: &mut ShellcideApp, ctx: &egui::Context) {
                     "[Syntax] Switched to {}",
                     if app.att_syntax { "AT&T" } else { "Intel" }
                 ));
+                if app.att_syntax {
+                    app.code_input = crate::syntax_converter::intel_to_att(&app.code_input);
+                } else {
+                    app.code_input = crate::syntax_converter::att_to_intel(&app.code_input);
+                }
+                app.do_assemble();
             }
 
             ui.separator();

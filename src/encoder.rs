@@ -371,182 +371,108 @@ pub fn generate_rle_stub(
     arch: TargetArch,
     att_syntax: bool,
 ) -> Result<String, String> {
-    match arch {
+    let mut s = match arch {
         TargetArch::X86_64 => {
             let mut s = String::new();
             s.push_str("jmp get_payload\n");
             s.push_str("decoder_stub:\n");
-            if att_syntax {
-                s.push_str("    popq %rsi\n");
-                s.push_str("    movq %rsi, %r8\n");
-                s.push_str("    pushq %r8\n");
-                s.push_str("    cld\n");
-                s.push_str(&generate_mov_reg_nullfree("rcx", compressed_len, true));
-                s.push_str("    subq %rcx, %rsp\n");
-                s.push_str("    movq %rsp, %rdi\n");
-                s.push_str("    pushq %rdi\n");
-                s.push_str("    pushq %rcx\n");
-                s.push_str("    rep movsb\n");
-                s.push_str("    popq %rcx\n");
-                s.push_str("    popq %rsi\n");
-                s.push_str("    movq %r8, %rdi\n");
-                s.push_str("decompress_loop:\n");
-                s.push_str("    testq %rcx, %rcx\n");
-                s.push_str("    jz decompress_done\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    decq %rcx\n");
-                s.push_str(&format!("    cmpb ${}, %al\n", marker));
-                s.push_str("    jne write_literal\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    decq %rcx\n");
-                s.push_str("    movb %al, %dl\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    decq %rcx\n");
-                s.push_str("write_run_loop:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    decb %dl\n");
-                s.push_str("    jnz write_run_loop\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("write_literal:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("decompress_done:\n");
-                s.push_str(&generate_mov_reg_nullfree("rcx", compressed_len, true));
-                s.push_str("    addq %rcx, %rsp\n");
-                s.push_str("    ret\n");
-            } else {
-                s.push_str("    pop rsi\n");
-                s.push_str("    mov r8, rsi\n");
-                s.push_str("    push r8\n");
-                s.push_str("    cld\n");
-                s.push_str(&generate_mov_reg_nullfree("rcx", compressed_len, false));
-                s.push_str("    sub rsp, rcx\n");
-                s.push_str("    mov rdi, rsp\n");
-                s.push_str("    push rdi\n");
-                s.push_str("    push rcx\n");
-                s.push_str("    rep movsb\n");
-                s.push_str("    pop rcx\n");
-                s.push_str("    pop rsi\n");
-                s.push_str("    mov rdi, r8\n");
-                s.push_str("decompress_loop:\n");
-                s.push_str("    test rcx, rcx\n");
-                s.push_str("    jz decompress_done\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    dec rcx\n");
-                s.push_str(&format!("    cmp al, {}\n", marker));
-                s.push_str("    jne write_literal\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    dec rcx\n");
-                s.push_str("    mov dl, al\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    dec rcx\n");
-                s.push_str("write_run_loop:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    dec dl\n");
-                s.push_str("    jnz write_run_loop\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("write_literal:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("decompress_done:\n");
-                s.push_str(&generate_mov_reg_nullfree("rcx", compressed_len, false));
-                s.push_str("    add rsp, rcx\n");
-                s.push_str("    ret\n");
-            }
+            s.push_str("    pop rsi\n");
+            s.push_str("    mov r8, rsi\n");
+            s.push_str("    push r8\n");
+            s.push_str("    cld\n");
+            s.push_str(&generate_mov_reg_nullfree("rcx", compressed_len, false));
+            s.push_str("    sub rsp, rcx\n");
+            s.push_str("    mov rdi, rsp\n");
+            s.push_str("    push rdi\n");
+            s.push_str("    push rcx\n");
+            s.push_str("    rep movsb\n");
+            s.push_str("    pop rcx\n");
+            s.push_str("    pop rsi\n");
+            s.push_str("    mov rdi, r8\n");
+            s.push_str("decompress_loop:\n");
+            s.push_str("    test rcx, rcx\n");
+            s.push_str("    jz decompress_done\n");
+            s.push_str("    lodsb\n");
+            s.push_str("    dec rcx\n");
+            s.push_str(&format!("    cmp al, {}\n", marker));
+            s.push_str("    jne write_literal\n");
+            s.push_str("    lodsb\n");
+            s.push_str("    dec rcx\n");
+            s.push_str("    mov dl, al\n");
+            s.push_str("    lodsb\n");
+            s.push_str("    dec rcx\n");
+            s.push_str("write_run_loop:\n");
+            s.push_str("    stosb\n");
+            s.push_str("    dec dl\n");
+            s.push_str("    jnz write_run_loop\n");
+            s.push_str("    jmp decompress_loop\n");
+            s.push_str("write_literal:\n");
+            s.push_str("    stosb\n");
+            s.push_str("    jmp decompress_loop\n");
+            s.push_str("decompress_done:\n");
+            s.push_str(&generate_mov_reg_nullfree("rcx", compressed_len, false));
+            s.push_str("    add rsp, rcx\n");
+            s.push_str("    ret\n");
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
-            Ok(s)
+            s
         }
         TargetArch::X86 => {
             let mut s = String::new();
             s.push_str("jmp get_payload\n");
             s.push_str("decoder_stub:\n");
-            if att_syntax {
-                s.push_str("    popl %esi\n");
-                s.push_str("    movl %esi, %ebx\n");
-                s.push_str("    pushl %ebx\n");
-                s.push_str("    cld\n");
-                s.push_str(&generate_mov_reg_nullfree("ecx", compressed_len, true));
-                s.push_str("    subl %ecx, %esp\n");
-                s.push_str("    movl %esp, %edi\n");
-                s.push_str("    pushl %edi\n");
-                s.push_str("    pushl %ecx\n");
-                s.push_str("    rep movsb\n");
-                s.push_str("    popl %ecx\n");
-                s.push_str("    popl %esi\n");
-                s.push_str("    movl %ebx, %edi\n");
-                s.push_str("decompress_loop:\n");
-                s.push_str("    testl %ecx, %ecx\n");
-                s.push_str("    jz decompress_done\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    decl %ecx\n");
-                s.push_str(&format!("    cmpb ${}, %al\n", marker));
-                s.push_str("    jne write_literal\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    decl %ecx\n");
-                s.push_str("    movb %al, %dl\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    decl %ecx\n");
-                s.push_str("write_run_loop:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    decb %dl\n");
-                s.push_str("    jnz write_run_loop\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("write_literal:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("decompress_done:\n");
-                s.push_str(&generate_mov_reg_nullfree("ecx", compressed_len, true));
-                s.push_str("    addl %ecx, %esp\n");
-                s.push_str("    ret\n");
-            } else {
-                s.push_str("    pop esi\n");
-                s.push_str("    mov ebx, esi\n");
-                s.push_str("    push ebx\n");
-                s.push_str("    cld\n");
-                s.push_str(&generate_mov_reg_nullfree("ecx", compressed_len, false));
-                s.push_str("    sub esp, ecx\n");
-                s.push_str("    mov edi, esp\n");
-                s.push_str("    push edi\n");
-                s.push_str("    push ecx\n");
-                s.push_str("    rep movsb\n");
-                s.push_str("    pop ecx\n");
-                s.push_str("    pop esi\n");
-                s.push_str("    mov edi, ebx\n");
-                s.push_str("decompress_loop:\n");
-                s.push_str("    test ecx, ecx\n");
-                s.push_str("    jz decompress_done\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    dec ecx\n");
-                s.push_str(&format!("    cmp al, {}\n", marker));
-                s.push_str("    jne write_literal\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    dec ecx\n");
-                s.push_str("    mov dl, al\n");
-                s.push_str("    lodsb\n");
-                s.push_str("    dec ecx\n");
-                s.push_str("write_run_loop:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    dec dl\n");
-                s.push_str("    jnz write_run_loop\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("write_literal:\n");
-                s.push_str("    stosb\n");
-                s.push_str("    jmp decompress_loop\n");
-                s.push_str("decompress_done:\n");
-                s.push_str(&generate_mov_reg_nullfree("ecx", compressed_len, false));
-                s.push_str("    add esp, ecx\n");
-                s.push_str("    ret\n");
-            }
+            s.push_str("    pop esi\n");
+            s.push_str("    mov ebx, esi\n");
+            s.push_str("    push ebx\n");
+            s.push_str("    cld\n");
+            s.push_str(&generate_mov_reg_nullfree("ecx", compressed_len, false));
+            s.push_str("    sub esp, ecx\n");
+            s.push_str("    mov edi, esp\n");
+            s.push_str("    push edi\n");
+            s.push_str("    push ecx\n");
+            s.push_str("    rep movsb\n");
+            s.push_str("    pop ecx\n");
+            s.push_str("    pop esi\n");
+            s.push_str("    mov edi, ebx\n");
+            s.push_str("decompress_loop:\n");
+            s.push_str("    test ecx, ecx\n");
+            s.push_str("    jz decompress_done\n");
+            s.push_str("    lodsb\n");
+            s.push_str("    dec ecx\n");
+            s.push_str(&format!("    cmp al, {}\n", marker));
+            s.push_str("    jne write_literal\n");
+            s.push_str("    lodsb\n");
+            s.push_str("    dec ecx\n");
+            s.push_str("    mov dl, al\n");
+            s.push_str("    lodsb\n");
+            s.push_str("    dec ecx\n");
+            s.push_str("write_run_loop:\n");
+            s.push_str("    stosb\n");
+            s.push_str("    dec dl\n");
+            s.push_str("    jnz write_run_loop\n");
+            s.push_str("    jmp decompress_loop\n");
+            s.push_str("write_literal:\n");
+            s.push_str("    stosb\n");
+            s.push_str("    jmp decompress_loop\n");
+            s.push_str("decompress_done:\n");
+            s.push_str(&generate_mov_reg_nullfree("ecx", compressed_len, false));
+            s.push_str("    add esp, ecx\n");
+            s.push_str("    ret\n");
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
-            Ok(s)
+            s
         }
-        _ => Err(format!(
-            "RLE compression stub generation not supported for {}",
-            arch.display_name()
-        )),
+        _ => {
+            return Err(format!(
+                "RLE compression stub generation not supported for {}",
+                arch.display_name()
+            ))
+        }
+    };
+    if att_syntax {
+        s = crate::syntax_converter::intel_to_att(&s);
     }
+    Ok(s)
 }
 
 fn generate_mov_ecx_nullfree(val: usize, att_syntax: bool) -> String {
@@ -607,120 +533,84 @@ fn generate_repeating_key_stub(
     payload_len: usize,
     arch: TargetArch,
     att_syntax: bool,
-    op_att_64: &str,
     op_intel_64: &str,
-    op_att_32: &str,
     op_intel_32: &str,
     encryptor_name: &str,
 ) -> Result<String, String> {
     if key.is_empty() {
         return Err("Encryption key cannot be empty".to_string());
     }
-    match arch {
+    let mut s = match arch {
         TargetArch::X86_64 => {
             let mut s = String::new();
             s.push_str("jmp get_payload\n");
             s.push_str("decoder_stub:\n");
-            if att_syntax {
-                s.push_str("    popq %rsi\n");
-                s.push_str("    movq %rsi, %r8\n");
-                s.push_str(&format!("    leaq {}(%rsi), %r9\n", key.len()));
-                s.push_str("    movq %r9, %rdi\n");
-                s.push_str("    pushq %rdi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, true));
-                s.push_str("decrypt_loop:\n");
-                s.push_str("    cmpq %r9, %rsi\n");
-                s.push_str("    jne key_ok\n");
-                s.push_str("    movq %r8, %rsi\n");
-                s.push_str("key_ok:\n");
-                s.push_str("    movb (%rsi), %al\n");
-                s.push_str(op_att_64);
-                s.push_str("    incq %rsi\n");
-                s.push_str("    incq %rdi\n");
-                s.push_str("    decq %rcx\n");
-                s.push_str("    jnz decrypt_loop\n");
-            } else {
-                s.push_str("    pop rsi\n");
-                s.push_str("    mov r8, rsi\n");
-                s.push_str(&format!("    lea r9, [rsi + {}]\n", key.len()));
-                s.push_str("    mov rdi, r9\n");
-                s.push_str("    push rdi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
-                s.push_str("decrypt_loop:\n");
-                s.push_str("    cmp rsi, r9\n");
-                s.push_str("    jne key_ok\n");
-                s.push_str("    mov rsi, r8\n");
-                s.push_str("key_ok:\n");
-                s.push_str("    mov al, byte ptr [rsi]\n");
-                s.push_str(op_intel_64);
-                s.push_str("    inc rsi\n");
-                s.push_str("    inc rdi\n");
-                s.push_str("    dec rcx\n");
-                s.push_str("    jnz decrypt_loop\n");
-            }
+            s.push_str("    pop rsi\n");
+            s.push_str("    mov r8, rsi\n");
+            s.push_str(&format!("    lea r9, [rsi + {}]\n", key.len()));
+            s.push_str("    mov rdi, r9\n");
+            s.push_str("    push rdi\n");
+            s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
+            s.push_str("decrypt_loop:\n");
+            s.push_str("    cmp rsi, r9\n");
+            s.push_str("    jne key_ok\n");
+            s.push_str("    mov rsi, r8\n");
+            s.push_str("key_ok:\n");
+            s.push_str("    mov al, byte ptr [rsi]\n");
+            s.push_str(op_intel_64);
+            s.push_str("    inc rsi\n");
+            s.push_str("    inc rdi\n");
+            s.push_str("    dec rcx\n");
+            s.push_str("    jnz decrypt_loop\n");
             s.push_str("    ret\n");
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
             s.push_str("    .byte ");
             s.push_str(&format_comma_hex(key));
             s.push('\n');
-            Ok(s)
+            s
         }
         TargetArch::X86 => {
             let mut s = String::new();
             s.push_str("jmp get_payload\n");
             s.push_str("decoder_stub:\n");
-            if att_syntax {
-                s.push_str("    popl %esi\n");
-                s.push_str("    movl %esi, %edx\n");
-                s.push_str(&format!("    leal {}(%esi), %eax\n", key.len()));
-                s.push_str("    movl %eax, %edi\n");
-                s.push_str("    pushl %edi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, true));
-                s.push_str("decrypt_loop:\n");
-                s.push_str("    cmpl %eax, %esi\n");
-                s.push_str("    jne key_ok\n");
-                s.push_str("    movl %edx, %esi\n");
-                s.push_str("key_ok:\n");
-                s.push_str("    movb (%esi), %bl\n");
-                s.push_str(op_att_32);
-                s.push_str("    incl %esi\n");
-                s.push_str("    incl %edi\n");
-                s.push_str("    decl %ecx\n");
-                s.push_str("    jnz decrypt_loop\n");
-            } else {
-                s.push_str("    pop esi\n");
-                s.push_str("    mov edx, esi\n");
-                s.push_str(&format!("    lea eax, [esi + {}]\n", key.len()));
-                s.push_str("    mov edi, eax\n");
-                s.push_str("    push edi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
-                s.push_str("decrypt_loop:\n");
-                s.push_str("    cmp esi, eax\n");
-                s.push_str("    jne key_ok\n");
-                s.push_str("    mov esi, edx\n");
-                s.push_str("key_ok:\n");
-                s.push_str("    mov bl, byte ptr [esi]\n");
-                s.push_str(op_intel_32);
-                s.push_str("    inc esi\n");
-                s.push_str("    inc edi\n");
-                s.push_str("    dec ecx\n");
-                s.push_str("    jnz decrypt_loop\n");
-            }
+            s.push_str("    pop esi\n");
+            s.push_str("    mov edx, esi\n");
+            s.push_str(&format!("    lea eax, [esi + {}]\n", key.len()));
+            s.push_str("    mov edi, eax\n");
+            s.push_str("    push edi\n");
+            s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
+            s.push_str("decrypt_loop:\n");
+            s.push_str("    cmp esi, eax\n");
+            s.push_str("    jne key_ok\n");
+            s.push_str("    mov esi, edx\n");
+            s.push_str("key_ok:\n");
+            s.push_str("    mov bl, byte ptr [esi]\n");
+            s.push_str(op_intel_32);
+            s.push_str("    inc esi\n");
+            s.push_str("    inc edi\n");
+            s.push_str("    dec ecx\n");
+            s.push_str("    jnz decrypt_loop\n");
             s.push_str("    ret\n");
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
             s.push_str("    .byte ");
             s.push_str(&format_comma_hex(key));
             s.push('\n');
-            Ok(s)
+            s
         }
-        _ => Err(format!(
-            "{} encryptor stub generation not supported for {}",
-            encryptor_name,
-            arch.display_name()
-        )),
+        _ => {
+            return Err(format!(
+                "{} encryptor stub generation not supported for {}",
+                encryptor_name,
+                arch.display_name()
+            ))
+        }
+    };
+    if att_syntax {
+        s = crate::syntax_converter::intel_to_att(&s);
     }
+    Ok(s)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -729,75 +619,57 @@ fn generate_1byte_stub(
     payload_len: usize,
     arch: TargetArch,
     att_syntax: bool,
-    op_att_64: &str,
     op_intel_64: &str,
-    op_att_32: &str,
     op_intel_32: &str,
     encoder_name: &str,
 ) -> Result<String, String> {
-    match arch {
+    let mut s = match arch {
         TargetArch::X86_64 => {
             let mut s = String::new();
             s.push_str("jmp get_payload\n");
             s.push_str("decoder_stub:\n");
-            if att_syntax {
-                s.push_str("    popq %rsi\n");
-                s.push_str("    pushq %rsi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, true));
-                s.push_str("decode_loop:\n");
-                s.push_str(&format!("    {} ${}, (%rsi)\n", op_att_64, key));
-                s.push_str("    incq %rsi\n");
-                s.push_str("    decq %rcx\n");
-                s.push_str("    jnz decode_loop\n");
-            } else {
-                s.push_str("    pop rsi\n");
-                s.push_str("    push rsi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
-                s.push_str("decode_loop:\n");
-                s.push_str(&format!("    {} byte ptr [rsi], {}\n", op_intel_64, key));
-                s.push_str("    inc rsi\n");
-                s.push_str("    dec rcx\n");
-                s.push_str("    jnz decode_loop\n");
-            }
+            s.push_str("    pop rsi\n");
+            s.push_str("    push rsi\n");
+            s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
+            s.push_str("decode_loop:\n");
+            s.push_str(&format!("    {} byte ptr [rsi], {}\n", op_intel_64, key));
+            s.push_str("    inc rsi\n");
+            s.push_str("    dec rcx\n");
+            s.push_str("    jnz decode_loop\n");
             s.push_str("    ret\n");
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
-            Ok(s)
+            s
         }
         TargetArch::X86 => {
             let mut s = String::new();
             s.push_str("jmp get_payload\n");
             s.push_str("decoder_stub:\n");
-            if att_syntax {
-                s.push_str("    popl %esi\n");
-                s.push_str("    pushl %esi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, true));
-                s.push_str("decode_loop:\n");
-                s.push_str(&format!("    {} ${}, (%esi)\n", op_att_32, key));
-                s.push_str("    incl %esi\n");
-                s.push_str("    decl %ecx\n");
-                s.push_str("    jnz decode_loop\n");
-            } else {
-                s.push_str("    pop esi\n");
-                s.push_str("    push esi\n");
-                s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
-                s.push_str("decode_loop:\n");
-                s.push_str(&format!("    {} byte ptr [esi], {}\n", op_intel_32, key));
-                s.push_str("    inc esi\n");
-                s.push_str("    dec ecx\n");
-                s.push_str("    jnz decode_loop\n");
-            }
+            s.push_str("    pop esi\n");
+            s.push_str("    push esi\n");
+            s.push_str(&generate_mov_ecx_nullfree(payload_len, false));
+            s.push_str("decode_loop:\n");
+            s.push_str(&format!("    {} byte ptr [esi], {}\n", op_intel_32, key));
+            s.push_str("    inc esi\n");
+            s.push_str("    dec ecx\n");
+            s.push_str("    jnz decode_loop\n");
             s.push_str("    ret\n");
             s.push_str("get_payload:\n");
             s.push_str("    call decoder_stub\n");
-            Ok(s)
+            s
         }
-        _ => Err(format!(
-            "{} encoder stub generation not supported for {}",
-            encoder_name,
-            arch.display_name()
-        )),
+        _ => {
+            return Err(format!(
+                "{} encoder stub generation not supported for {}",
+                encoder_name,
+                arch.display_name()
+            ))
+        }
+    };
+    if att_syntax {
+        s = crate::syntax_converter::intel_to_att(&s);
     }
+    Ok(s)
 }
 
 impl Encryptor for XorEncryptor {
@@ -827,9 +699,7 @@ impl Encryptor for XorEncryptor {
             payload_len,
             arch,
             att_syntax,
-            "    xorb %al, (%rdi)\n",
             "    xor byte ptr [rdi], al\n",
-            "    xorb %bl, (%edi)\n",
             "    xor byte ptr [edi], bl\n",
             "XOR",
         )
@@ -863,9 +733,7 @@ impl Encryptor for AddEncryptor {
             payload_len,
             arch,
             att_syntax,
-            "    subb %al, (%rdi)\n",
             "    sub byte ptr [rdi], al\n",
-            "    subb %bl, (%edi)\n",
             "    sub byte ptr [edi], bl\n",
             "ADD",
         )
@@ -908,124 +776,125 @@ impl Encryptor for AesEncryptor {
         let key_str = format_comma_hex(&key);
         let n_blocks = ((payload_len + 15) & !15) / 16;
 
-        match arch {
+        let mut s = match arch {
             TargetArch::X86_64 => {
                 let mut s = String::new();
                 s.push_str("jmp get_payload\n");
-
-                if att_syntax {
-                } else {
-                    // Key expansion helper
-                    s.push_str(
-                        "
-                    key_expansion_128_helper:
-                        pshufd xmm2, xmm2, 255
-                        movdqa xmm3, xmm1
-                        push 3
-                        pop rcx
-                    Lhelper_loop:
-                        palignr xmm3, xmm4, 12
-                        pxor xmm1, xmm3
-                        loop Lhelper_loop
-                        pxor xmm1, xmm2
-                        ret
-                    \n",
-                    );
-                    s.push_str(&format!(
-                        "
-                    decoder_stub:
-                        # Get pointer to encrypted payload
-                        pop rsi;
-
-                        # Clear xmm4 to zero for the palignr byte-shift inside the helper
-                        pxor xmm4, xmm4
-
-                        # Load original key (Encryption Round 0)
-                        movdqu xmm1, [rsi]
-                        add rsi, 16
-
-                        # We want to return to the payload after decryption
-                        push rsi
-
-                        movdqa xmm5, xmm1       # xmm5 = Decryption Round 10 key
-                        # Round 1 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x01
-                        call key_expansion_128_helper
-                        aesimc xmm6, xmm1       # xmm6 = Decryption Round 9 key
-                        # Round 2 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x02
-                        call key_expansion_128_helper
-                        aesimc xmm7, xmm1       # xmm7 = Decryption Round 8 key
-                        # Round 3 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x04
-                        call key_expansion_128_helper
-                        aesimc xmm8, xmm1       # xmm8 = Decryption Round 7 key
-                        # Round 4 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x08
-                        call key_expansion_128_helper
-                        aesimc xmm9, xmm1       # xmm9 = Decryption Round 6 key
-                        # Round 5 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x10
-                        call key_expansion_128_helper
-                        aesimc xmm10, xmm1      # xmm10 = Decryption Round 5 key
-                        # Round 6 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x20
-                        call key_expansion_128_helper
-                        aesimc xmm11, xmm1      # xmm11 = Decryption Round 4 key
-                        # Round 7 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x40
-                        call key_expansion_128_helper
-                        aesimc xmm12, xmm1      # xmm12 = Decryption Round 3 key
-                        # Round 8 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x80
-                        call key_expansion_128_helper
-                        aesimc xmm13, xmm1      # xmm13 = Decryption Round 2 key
-                        # Round 9 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x1b
-                        call key_expansion_128_helper
-                        aesimc xmm14, xmm1      # xmm14 = Decryption Round 1 key
-                        # Round 10 Key Expansion
-                        aeskeygenassist xmm2, xmm1, 0x36
-                        call key_expansion_128_helper
-                        movdqa xmm15, xmm1      # xmm15 = Decryption Round 0 key (no aesimc)
-
-                        mov rcx, {n_blocks}
-                    Lblock_loop:
-                        # Load 16-byte ciphertext block
-                        movdqu xmm0, [rsi]
-                        # Initial XOR step with Decryption Round 0 Key
-                        pxor xmm0, xmm15
-                        # 9 unrolled intermediate rounds using the keys stored in registers
-                        aesdec xmm0, xmm14
-                        aesdec xmm0, xmm13
-                        aesdec xmm0, xmm12
-                        aesdec xmm0, xmm11
-                        aesdec xmm0, xmm10
-                        aesdec xmm0, xmm9
-                        aesdec xmm0, xmm8
-                        aesdec xmm0, xmm7
-                        aesdec xmm0, xmm6
-                        # Final round of aesdeclast using Decryption Round 10 Key
-                        aesdeclast xmm0, xmm5
-                        # Store decrypted plaintext block
-                        movdqu [rsi], xmm0
-                        add rsi, 16
-                        dec rcx
-                        jnz Lblock_loop
+                // Key expansion helper
+                s.push_str(
                     "
-                    ));
-                }
+                key_expansion_128_helper:
+                    pshufd xmm2, xmm2, 255
+                    movdqa xmm3, xmm1
+                    push 3
+                    pop rcx
+                Lhelper_loop:
+                    palignr xmm3, xmm4, 12
+                    pxor xmm1, xmm3
+                    loop Lhelper_loop
+                    pxor xmm1, xmm2
+                    ret
+                \n",
+                );
+                s.push_str(&format!(
+                    "
+                decoder_stub:
+                    # Get pointer to encrypted payload
+                    pop rsi;
+
+                    # Clear xmm4 to zero for the palignr byte-shift inside the helper
+                    pxor xmm4, xmm4
+
+                    # Load original key (Encryption Round 0)
+                    movdqu xmm1, [rsi]
+                    add rsi, 16
+
+                    # We want to return to the payload after decryption
+                    push rsi
+
+                    movdqa xmm5, xmm1       # xmm5 = Decryption Round 10 key
+                    # Round 1 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x01
+                    call key_expansion_128_helper
+                    aesimc xmm6, xmm1       # xmm6 = Decryption Round 9 key
+                    # Round 2 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x02
+                    call key_expansion_128_helper
+                    aesimc xmm7, xmm1       # xmm7 = Decryption Round 8 key
+                    # Round 3 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x04
+                    call key_expansion_128_helper
+                    aesimc xmm8, xmm1       # xmm8 = Decryption Round 7 key
+                    # Round 4 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x08
+                    call key_expansion_128_helper
+                    aesimc xmm9, xmm1       # xmm9 = Decryption Round 6 key
+                    # Round 5 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x10
+                    call key_expansion_128_helper
+                    aesimc xmm10, xmm1      # xmm10 = Decryption Round 5 key
+                    # Round 6 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x20
+                    call key_expansion_128_helper
+                    aesimc xmm11, xmm1      # xmm11 = Decryption Round 4 key
+                    # Round 7 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x40
+                    call key_expansion_128_helper
+                    aesimc xmm12, xmm1      # xmm12 = Decryption Round 3 key
+                    # Round 8 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x80
+                    call key_expansion_128_helper
+                    aesimc xmm13, xmm1      # xmm13 = Decryption Round 2 key
+                    # Round 9 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x1b
+                    call key_expansion_128_helper
+                    aesimc xmm14, xmm1      # xmm14 = Decryption Round 1 key
+                    # Round 10 Key Expansion
+                    aeskeygenassist xmm2, xmm1, 0x36
+                    call key_expansion_128_helper
+                    movdqa xmm15, xmm1      # xmm15 = Decryption Round 0 key (no aesimc)
+
+                    mov rcx, {n_blocks}
+                Lblock_loop:
+                    # Load 16-byte ciphertext block
+                    movdqu xmm0, [rsi]
+                    # Initial XOR step with Decryption Round 0 Key
+                    pxor xmm0, xmm15
+                    # 9 unrolled intermediate rounds using the keys stored in registers
+                    aesdec xmm0, xmm14
+                    aesdec xmm0, xmm13
+                    aesdec xmm0, xmm12
+                    aesdec xmm0, xmm11
+                    aesdec xmm0, xmm10
+                    aesdec xmm0, xmm9
+                    aesdec xmm0, xmm8
+                    aesdec xmm0, xmm7
+                    aesdec xmm0, xmm6
+                    # Final round of aesdeclast using Decryption Round 10 Key
+                    aesdeclast xmm0, xmm5
+                    # Store decrypted plaintext block
+                    movdqu [rsi], xmm0
+                    add rsi, 16
+                    dec rcx
+                    jnz Lblock_loop
+                "
+                ));
 
                 s.push_str("    ret\n");
                 s.push_str("get_payload:\n");
                 s.push_str("    call decoder_stub\n");
                 s.push_str(&format!("    .db {}\n", key_str));
-                Ok(s)
+                s
             }
             _ => {
                 return Err("Unsupported architecture".to_string());
             }
+        };
+
+        if att_syntax {
+            s = crate::syntax_converter::intel_to_att(&s);
         }
+        Ok(s)
     }
 }
 
@@ -1045,17 +914,7 @@ impl Encoder for XorEncoder {
         arch: TargetArch,
         att_syntax: bool,
     ) -> Result<String, String> {
-        generate_1byte_stub(
-            key,
-            payload_len,
-            arch,
-            att_syntax,
-            "xorb",
-            "xor",
-            "xorb",
-            "xor",
-            "XOR",
-        )
+        generate_1byte_stub(key, payload_len, arch, att_syntax, "xor", "xor", "XOR")
     }
 }
 
@@ -1075,17 +934,7 @@ impl Encoder for AddEncoder {
         arch: TargetArch,
         att_syntax: bool,
     ) -> Result<String, String> {
-        generate_1byte_stub(
-            key,
-            payload_len,
-            arch,
-            att_syntax,
-            "subb",
-            "sub",
-            "subb",
-            "sub",
-            "ADD",
-        )
+        generate_1byte_stub(key, payload_len, arch, att_syntax, "sub", "sub", "ADD")
     }
 }
 
@@ -1105,17 +954,7 @@ impl Encoder for SubEncoder {
         arch: TargetArch,
         att_syntax: bool,
     ) -> Result<String, String> {
-        generate_1byte_stub(
-            key,
-            payload_len,
-            arch,
-            att_syntax,
-            "addb",
-            "add",
-            "addb",
-            "add",
-            "SUB",
-        )
+        generate_1byte_stub(key, payload_len, arch, att_syntax, "add", "add", "SUB")
     }
 }
 

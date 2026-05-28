@@ -5,6 +5,7 @@ mod debugger;
 mod disassembler;
 mod editor;
 mod encoder;
+pub mod syntax_converter;
 mod syscalls;
 mod ui;
 
